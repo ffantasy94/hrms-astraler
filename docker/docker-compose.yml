@@ -2,6 +2,7 @@ version: "15.37"
 name: hrms
 services:
   mariadb:
+    restart: always
     image: mariadb:10.8
     command:
       - --character-set-server=utf8mb4
@@ -14,9 +15,11 @@ services:
       - mariadb-data:/var/lib/mysql
 
   redis:
+    restart: always
     image: redis:alpine
 
   frappe:
+    restart: always
     image: frappe/bench:latest
     command: bash /workspace/init.sh
     environment:
@@ -25,8 +28,18 @@ services:
     volumes:
       - .:/workspace
     ports:
-      - 8000:8000
-      - 9000:9000
+      - 8000
+      - 9000
+
+  nginx:
+    restart: always
+    image: nginx:latest
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - frappe
 
 volumes:
   mariadb-data:
