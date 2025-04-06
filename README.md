@@ -1,8 +1,8 @@
 <div align="center">
 	<a href="https://frappe.io/hr">
-		<img src=".github/frappe-hr-logo.png" height="80px" width="80px" alt="Frappe HR Logo">
+		<img src=".github/astraler-hr-logo.png" height="80px" width="80px" alt="Astraler HR Logo">
 	</a>
-	<h2>Frappe HR</h2>
+	<h2>Astraler HR</h2>
 	<p align="center">
 		<p>Open Source, modern, and easy-to-use HR and Payroll Software</p>
 	</p>
@@ -22,9 +22,9 @@
 	<a href="https://docs.frappe.io/hr/introduction">Documentation</a>
 </div>
 
-## Frappe HR
+## Astraler HR
 
-Frappe HR has everything you need to drive excellence within the company. It's a complete HRMS solution with over 13 different modules right from Employee Management, Onboarding, Leaves, to Payroll, Taxation, and more!
+Astraler HR has everything you need to drive excellence within the company. It's a complete HRMS solution with over 13 different modules right from Employee Management, Onboarding, Leaves, to Payroll, Taxation, and more!
 
 ## Motivation
 When Frappe team started growing in terms of size, we needed an open-source HR and Payroll software. We didn't find any "true" open-source HR software out there and so decided to build one ourselves.
@@ -37,7 +37,7 @@ Initially, it was a set of modules within ERPNext but version 14 onwards, as the
 - **Expense Claims and Advances**: Manage employee advances, claim expenses, configure multi-level approval workflows, all this with seamless integration with ERPNext accounting.
 - **Performance Management**: Track goals, align goals with key result areas (KRAs), enable employees to evaluate themselves, make managing appraisal cycles easy.
 - **Payroll & Taxation**: Create salary structures, configure income tax slabs, run standard payroll, accomodate additional salaries and off cycle payments, view income breakup on salary slips and so much more.
-- **Frappe HR Mobile App**: Apply for and approve leaves on the go, check-in and check-out, access employee profile right from the mobile app.
+- **Astraler HR Mobile App**: Apply for and approve leaves on the go, check-in and check-out, access employee profile right from the mobile app.
 
 <details open>
 
@@ -108,7 +108,7 @@ Use the following credentials to log in:
 ## Learning and Community
 
 1. [Frappe School](https://frappe.school) - Learn Frappe Framework and ERPNext from the various courses by the maintainers or from the community.
-2. [Documentation](https://docs.frappe.io/hr) - Extensive documentation for Frappe HR.
+2. [Documentation](https://docs.frappe.io/hr) - Extensive documentation for Astraler HR.
 3. [User Forum](https://discuss.erpnext.com/) - Engage with the community of ERPNext users and service providers.
 4. [Telegram Group](https://t.me/frappehr) - Get instant help from the community of users.
 
