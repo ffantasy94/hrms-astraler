@@ -11,7 +11,7 @@ def after_install():
 		click.secho("Thank you for installing Astraler HR!", fg="green")
 
 	except Exception as e:
-		BUG_REPORT_URL = "https://github.com/frappe/hrms/issues/new"
+		BUG_REPORT_URL = "https://github.com/ffantasy94/hrms-astraler/issues/new"
 		click.secho(
 			"Installation for Astraler HR app failed due to an error."
 			" Please try re-installing the app or"

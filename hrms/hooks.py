@@ -1,11 +1,11 @@
 app_name = "hrms"
 app_title = "Astraler HR"
-app_publisher = "Frappe Technologies Pvt. Ltd."
+app_publisher = "Astraler Technologies"
 app_description = "Modern HR and Payroll Software"
-app_email = "contact@frappe.io"
+app_email = "contact@astraler.com"
 app_license = "GNU General Public License (v3)"
 required_apps = ["frappe/erpnext"]
-source_link = "http://github.com/frappe/hrms"
+source_link = "http://github.com/ffantasy94/hrms-astraler"
 app_logo_url = "/assets/hrms/images/astraler-hr-logo.svg"
 app_home = "/app/overview"
 

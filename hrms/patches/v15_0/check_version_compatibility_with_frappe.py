@@ -7,7 +7,7 @@ def execute():
 	frappe_v = frappe.get_attr("frappe" + ".__version__")
 	hrms_v = frappe.get_attr("hrms" + ".__version__")
 
-	WIKI_URL = "https://github.com/frappe/hrms/wiki/Changes-to-branching-and-versioning"
+	WIKI_URL = "https://github.com/ffantasy94/hrms-astraler/wiki/Changes-to-branching-and-versioning"
 
 	if frappe_v.startswith("14") and hrms_v.startswith("15"):
 		message = f"""

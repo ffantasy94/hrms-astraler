@@ -4,13 +4,13 @@
   "description": "Open Source HR & Payroll System powered by the Frappe Framework",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/frappe/hrms.git"
+    "url": "git+https://github.com/ffantasy94/hrms-astraler.git"
   },
-  "homepage": "https://frappe.io/hr",
-  "author": "Frappe Technologies Pvt. Ltd.",
+  "homepage": "https://astraler.com/hr",
+  "author": "Astraler Technologies",
   "license": "GPL-3.0",
   "bugs": {
-    "url": "https://github.com/frappe/hrms/issues"
+    "url": "https://github.com/ffantasy94/hrms-astraler/issues"
   },
   "aworkspaces": ["frontend", "roster", "frappe-ui"],
   "scripts": {

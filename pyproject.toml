@@ -1,7 +1,7 @@
 [project]
 name = "hrms"
 authors = [
-    { name = "Frappe Technologies Pvt Ltd", email = "developers@frappe.io" },
+    { name = "Astraler Technologies", email = "contact@astraler.com" },
 ]
 description = "Open Source HR & Payroll Software"
 requires-python = ">=3.10"
@@ -63,9 +63,9 @@ section-order = [
 
 
 [project.urls]
-Homepage = "https://frappe.io/hr"
-Repository = "https://github.com/frappe/hrms.git"
-"Bug Reports" = "https://github.com/frappe/hrms/issues"
+Homepage = "https://astraler.com/hr"
+Repository = "https://github.com/ffantasy94/hrms-astraler.git"
+"Bug Reports" = "https://github.com/ffantasy94/hrms-astraler/issues"
 
 
 [tool.bench.frappe-dependencies]

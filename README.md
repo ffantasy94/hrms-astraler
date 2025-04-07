@@ -7,8 +7,8 @@
 		<p>Open Source, modern, and easy-to-use HR and Payroll Software</p>
 	</p>
 
-[![CI](https://github.com/frappe/hrms/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/frappe/hrms/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/frappe/hrms/branch/develop/graph/badge.svg?token=0TwvyUg3I5)](https://codecov.io/gh/frappe/hrms)
+[![CI](https://github.com/ffantasy94/hrms-astraler/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/ffantasy94/hrms-astraler/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ffantasy94/hrms-astraler/branch/develop/graph/badge.svg?token=0TwvyUg3I5)](https://codecov.io/gh/ffantasy94/hrms-astraler)
 
 </div>
 
@@ -77,7 +77,7 @@ It takes care of installation, setup, upgrades, monitoring, maintenance and supp
 ### Docker
 You need Docker, docker-compose and git setup on your machine. Refer [Docker documentation](https://docs.docker.com/). After that, run the following commands:
 ```
-git clone https://github.com/frappe/hrms
+git clone https://github.com/ffantasy94/hrms-astraler
 cd hrms/docker
 docker-compose up
 ```

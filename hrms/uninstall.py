@@ -9,7 +9,7 @@ def before_uninstall():
 		remove_custom_fields()
 
 	except Exception as e:
-		BUG_REPORT_URL = "https://github.com/frappe/hrms/issues/new"
+		BUG_REPORT_URL = "https://github.com/ffantasy94/hrms-astraler/issues/new"
 		click.secho(
 			"Removing Customizations for Astraler HR failed due to an error."
 			" Please try again or"
