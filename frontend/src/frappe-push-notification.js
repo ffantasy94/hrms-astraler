@@ -2,20 +2,9 @@ import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyBP303ffQH4KApQTuvXlYJuL5u97lJeQlI",
-  authDomain: "hrms-astraler.firebaseapp.com",
-  projectId: "hrms-astraler",
-  storageBucket: "hrms-astraler.firebasestorage.app",
-  messagingSenderId: "911504587532",
-  appId: "1:911504587532:web:0b48d16c515db68a766729",
-  measurementId: "G-5N4N5FBC35"
-};
-
 class FrappePushNotification {
   constructor() {
-    this.config = firebaseConfig;
+    this.config = null;
     this.app = null;
     this.messaging = null;
     this.analytics = null;
@@ -24,6 +13,23 @@ class FrappePushNotification {
 
   async initialize() {
     try {
+      // Fetch Firebase config from server
+      const response = await frappe.request({
+        url: 'hrms.api.get_firebase_config',
+        method: 'GET',
+        callback: (r) => {
+          if (r.message) {
+            this.config = r.message;
+            return this.config;
+          }
+          return null;
+        }
+      });
+
+      if (!this.config) {
+        throw new Error('Failed to fetch Firebase config');
+      }
+
       // Initialize Firebase
       this.app = initializeApp(this.config);
       
