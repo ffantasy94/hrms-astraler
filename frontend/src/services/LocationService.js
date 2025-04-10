@@ -421,9 +421,6 @@ class LocationService {
         latitude: latitude.toString(),
         longitude: longitude.toString(),
         device_id: 'AUTO_LOCATION',
-        shift_type: currentShift.shiftType,
-        shift_actual_start: currentShift.start.format('YYYY-MM-DD HH:mm:ss'),
-        shift_actual_end: currentShift.end.format('YYYY-MM-DD HH:mm:ss'),
         skip_auto_attendance: 0
       }
 
