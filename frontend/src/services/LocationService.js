@@ -65,6 +65,15 @@ class LocationService {
       console.log('Already tracking, updating employee data')
       this.employee = employee
       this.saveTrackingState(true)
+      // Force update shift timings and check location
+      await this.updateShiftTimings()
+      if (this.shouldTrackLocation()) {
+        console.log('In tracking window, starting location tracking')
+        this.startLocationTracking()
+      } else {
+        console.log('Outside tracking window, scheduling next check')
+        this.scheduleNextCheck()
+      }
       return
     }
 
@@ -102,7 +111,12 @@ class LocationService {
           checkinBuffer: 30,
           checkoutBuffer: 30
         }))
-        console.log('Updated shift timings:', this.shiftTimings)
+        console.log('Updated shift timings:', this.shiftTimings.map(shift => ({
+          start: shift.start.format('YYYY-MM-DD HH:mm:ss'),
+          end: shift.end.format('YYYY-MM-DD HH:mm:ss'),
+          checkinBuffer: shift.checkinBuffer,
+          checkoutBuffer: shift.checkoutBuffer
+        })))
       } else {
         console.log('No shift timings found')
         this.shiftTimings = []
@@ -120,6 +134,8 @@ class LocationService {
     }
 
     const now = dayjs()
+    console.log('Current time:', now.format('YYYY-MM-DD HH:mm:ss'))
+    
     const shouldTrack = this.shiftTimings.some(shift => {
       const checkinStart = shift.start.subtract(shift.checkinBuffer, 'minute')
       const checkoutEnd = shift.end.add(shift.checkoutBuffer, 'minute')
@@ -129,7 +145,9 @@ class LocationService {
         now: now.format('YYYY-MM-DD HH:mm:ss'),
         checkinStart: checkinStart.format('YYYY-MM-DD HH:mm:ss'),
         checkoutEnd: checkoutEnd.format('YYYY-MM-DD HH:mm:ss'),
-        isInWindow
+        isInWindow,
+        shiftStart: shift.start.format('YYYY-MM-DD HH:mm:ss'),
+        shiftEnd: shift.end.format('YYYY-MM-DD HH:mm:ss')
       })
       
       return isInWindow
@@ -197,6 +215,7 @@ class LocationService {
     if (this.isIOS()) {
       this.setupIOSLocationTracking()
     } else {
+      // For Android and other platforms, use watchPosition
       this.watchId = navigator.geolocation.watchPosition(
         this.handlePositionUpdate.bind(this),
         this.handleError.bind(this),
@@ -206,6 +225,7 @@ class LocationService {
           maximumAge: 0
         }
       )
+      console.log('Started watchPosition with ID:', this.watchId)
     }
   }
 
