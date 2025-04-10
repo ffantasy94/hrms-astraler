@@ -23,44 +23,34 @@ try {
 	const firebaseApp = initializeApp(JSON.parse(jsonConfig))
 	const messaging = getMessaging(firebaseApp)
 
-	function isChrome() {
-		return navigator.userAgent.toLowerCase().includes("chrome")
-	}
-
+	// Handle background messages
 	onBackgroundMessage(messaging, (payload) => {
-		const notificationTitle = payload.data.title
-		let notificationOptions = {
-			body: payload.data.body || "",
-		}
-		if (payload.data.notification_icon) {
-			notificationOptions["icon"] = payload.data.notification_icon
-		}
-		if (isChrome()) {
-			notificationOptions["data"] = {
-				url: payload.data.click_action,
-			}
-		} else {
-			if (payload.data.click_action) {
-				notificationOptions["actions"] = [
-					{
-						action: payload.data.click_action,
-						title: "View Details",
-					},
-				]
-			}
-		}
-		self.registration.showNotification(notificationTitle, notificationOptions)
-	})
+		console.log('Received background message:', payload);
 
-	if (isChrome()) {
-		self.addEventListener("notificationclick", (event) => {
-			event.stopImmediatePropagation()
-			event.notification.close()
-			if (event.notification.data && event.notification.data.url) {
-				clients.openWindow(event.notification.data.url)
+		const notificationTitle = payload.data.title;
+		const notificationOptions = {
+			body: payload.data.body || '',
+			icon: payload.data.notification_icon || '/icon.png',
+			badge: '/badge.png',
+			data: {
+				url: payload.data.click_action
 			}
-		})
-	}
+		};
+
+		return self.registration.showNotification(notificationTitle, notificationOptions);
+	});
+
+	// Handle notification click
+	self.addEventListener('notificationclick', (event) => {
+		event.notification.close();
+		
+		if (event.notification.data && event.notification.data.url) {
+			event.waitUntil(
+				clients.openWindow(event.notification.data.url)
+			);
+		}
+	});
+
 } catch (error) {
 	console.log("Failed to initialize Firebase", error)
 }

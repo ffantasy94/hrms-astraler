@@ -23,7 +23,10 @@ import { employeeResource } from "@/data/employee"
 import dayjs from "@/utils/dayjs"
 import getIonicConfig from "@/utils/ionicConfig"
 
-import FrappePushNotification from "../public/frappe-push-notification"
+import FrappePushNotification from "./frappe-push-notification"
+
+import { initializeApp } from 'firebase/app';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 /* Core CSS required for Ionic components to work properly */
 import "@ionic/vue/css/core.css"
@@ -61,23 +64,50 @@ app.provide("$dayjs", dayjs)
 async function registerServiceWorker() {
 	if ('serviceWorker' in navigator) {
 		try {
-			// Check if frappePushNotification is available
-			if (!window.frappePushNotification) {
-				console.warn('frappePushNotification not available, skipping service worker registration')
-				return
+			// Initialize Firebase
+			const initialized = await FrappePushNotification.initialize();
+			if (!initialized) {
+				console.warn('Failed to initialize Firebase, skipping service worker registration');
+				return;
 			}
 
-			// Get config first
-			const config = await window.frappePushNotification.fetchWebConfig()
-			if (!config) {
-				console.warn('No config available, skipping service worker registration')
-				return
+			// Request permission and get token
+			const permission = await FrappePushNotification.requestPermission();
+			if (permission) {
+				const token = await FrappePushNotification.getToken();
+				if (token) {
+					console.log('FCM Token:', token);
+					
+					// Send token to server
+					await FrappePushNotification.updateToken(token);
+				}
 			}
+
+			// Handle foreground messages
+			FrappePushNotification.onMessage((payload) => {
+				console.log('Received foreground message:', payload);
+				
+				const notification = new Notification(payload.data.title, {
+					body: payload.data.body,
+					icon: payload.data.notification_icon || '/icon.png',
+					data: {
+						url: payload.data.click_action
+					}
+				});
+
+				notification.onclick = () => {
+					window.focus();
+					if (payload.data.click_action) {
+						window.open(payload.data.click_action, '_blank');
+					}
+					notification.close();
+				};
+			});
 
 			// Build service worker URL
 			let swUrl = '/sw.js'
-			if (config) {
-				swUrl += `?config=${encodeURIComponent(JSON.stringify(config))}`
+			if (FrappePushNotification.config) {
+				swUrl += `?config=${encodeURIComponent(JSON.stringify(FrappePushNotification.config))}`
 			}
 
 			console.log('Registering service worker with URL:', swUrl)
