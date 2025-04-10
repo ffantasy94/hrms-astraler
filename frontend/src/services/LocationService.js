@@ -7,7 +7,7 @@ class LocationService {
     this.isTracking = this.loadTrackingState()
     this.lastCheckinType = null
     this.checkinResource = createResource({
-      url: 'hrms.hr.doctype.employee_checkin.employee_checkin.add_log_based_on_employee_field',
+      url: 'frappe.client.insert',
       auto: false,
     })
     this.shiftResource = createResource({
@@ -413,15 +413,22 @@ class LocationService {
         return
       }
 
+      // Determine log type based on time
+      let logType = 'IN'
+      if (now.isAfter(currentShift.end)) {
+        logType = 'OUT'
+      }
+
       // Prepare check-in data
       const checkInData = {
-        employee_field_value: this.employee.name,
-        employee_fieldname: 'name',
-        timestamp: now.format('YYYY-MM-DD HH:mm:ss'),
-        latitude: latitude.toString(),
-        longitude: longitude.toString(),
-        device_id: 'AUTO_LOCATION',
-        skip_auto_attendance: 0
+        doc: {
+          doctype: 'Employee Checkin',
+          employee: this.employee.name,
+          log_type: logType,
+          time: now.format('YYYY-MM-DD HH:mm:ss'),
+          latitude: latitude,
+          longitude: longitude
+        }
       }
 
       console.log('Submitting check-in with data:', checkInData)
