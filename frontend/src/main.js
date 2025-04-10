@@ -58,43 +58,51 @@ app.provide("$employee", employeeResource)
 app.provide("$socket", socket)
 app.provide("$dayjs", dayjs)
 
-const registerServiceWorker = async () => {
-	window.frappePushNotification = new FrappePushNotification("hrms")
-
-	if ("serviceWorker" in navigator) {
-		let serviceWorkerURL = "/sw.js"
-		let config = ""
-
+async function registerServiceWorker() {
+	if ('serviceWorker' in navigator) {
 		try {
-			config = await window.frappePushNotification.fetchWebConfig()
-			if (config) {
-				serviceWorkerURL = `${serviceWorkerURL}?config=${encodeURIComponent(
-					JSON.stringify(config)
-				)}`
+			// Get config first
+			const config = await frappe.getConfig()
+			if (!config) {
+				console.warn('No config available, skipping service worker registration')
+				return
 			}
-		} catch (err) {
-			console.error("Failed to fetch FCM config", err)
-		}
 
-		navigator.serviceWorker
-			.register(serviceWorkerURL, {
-				type: "classic",
-				scope: "/"
+			// Build service worker URL
+			let swUrl = '/sw.js'
+			if (config) {
+				swUrl += `?config=${encodeURIComponent(JSON.stringify(config))}`
+			}
+
+			console.log('Registering service worker with URL:', swUrl)
+			
+			const registration = await navigator.serviceWorker.register(swUrl, {
+				scope: '/'
 			})
-			.then((registration) => {
-				console.log("Service Worker registered with scope:", registration.scope)
+			
+			console.log('Service Worker registered successfully:', registration)
+			
+			// Add event listener for updates
+			registration.addEventListener('updatefound', () => {
+				const newWorker = registration.installing
+				console.log('Service Worker update found:', newWorker)
 				
-				if (config) {
-					window.frappePushNotification.initialize(registration).then(() => {
-						console.log("Frappe Push Notification initialized")
-					})
-				}
+				newWorker.addEventListener('statechange', () => {
+					console.log('Service Worker state changed:', newWorker.state)
+				})
 			})
-			.catch((err) => {
-				console.error("Failed to register service worker", err)
+			
+			// Handle errors
+			registration.addEventListener('error', (error) => {
+				console.error('Service Worker registration error:', error)
 			})
+			
+		} catch (error) {
+			console.error('Failed to register service worker:', error)
+			// Don't throw error, just log it
+		}
 	} else {
-		console.error("Service worker not enabled/supported by the browser")
+		console.log('Service Worker not supported')
 	}
 }
 

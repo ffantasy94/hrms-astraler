@@ -518,9 +518,25 @@ class LocationService {
           log_type: logType,
           time: now.format('YYYY-MM-DD HH:mm:ss'),
           latitude: latitude,
-          longitude: longitude,
-          shift: currentShift.assignment,
-          shift_type: currentShift.shiftType
+          longitude: longitude
+        }
+      }
+
+      // Only add shift and shift_type if they exist and are valid
+      if (currentShift.assignment && currentShift.shiftType) {
+        try {
+          // Verify shift exists before adding
+          const shiftResponse = await this.shiftResource.submit({
+            doctype: 'Shift Assignment',
+            name: currentShift.assignment
+          })
+          
+          if (shiftResponse && shiftResponse.message) {
+            checkInData.doc.shift = currentShift.assignment
+            checkInData.doc.shift_type = currentShift.shiftType
+          }
+        } catch (error) {
+          console.error('Error verifying shift:', error)
         }
       }
 
