@@ -120,22 +120,23 @@ class LocationService {
       console.log('Processed shifts:', shifts)
 
       if (shifts?.length) {
+        const now = dayjs()
         // Convert shifts to timings
         this.shiftTimings = shifts.map(shift => {
           console.log('Processing shift:', shift)
 
-          if (!shift.start_time || !shift.end_time || !shift.start_date) {
+          if (!shift.start_time || !shift.end_time) {
             console.log('Invalid shift data:', shift)
             return null
           }
 
-          // Parse the date and time strings
+          // Parse the time strings
           const [startHour, startMinute] = shift.start_time.split(':')
-          const endTime = shift.end_time
-          const [endHour, endMinute] = endTime.split(':')
+          const [endHour, endMinute] = shift.end_time.split(':')
 
-          // Use shift start_date as base date
-          const baseDate = dayjs(shift.start_date)
+          // Use current date as base date for timing calculations
+          const baseDate = now.startOf('day')
+          console.log('Using base date:', baseDate.format('YYYY-MM-DD'))
           
           const start = baseDate
             .hour(parseInt(startHour))
@@ -150,6 +151,25 @@ class LocationService {
           // If end time is before start time, it means the shift goes into the next day
           if (end.isBefore(start)) {
             end.add(1, 'day')
+          }
+
+          // Check if shift is active based on start_date and end_date
+          const shiftStartDate = dayjs(shift.start_date)
+          const shiftEndDate = shift.end_date ? dayjs(shift.end_date) : null
+          
+          const isActive = now.isAfter(shiftStartDate) && 
+                          (!shiftEndDate || now.isBefore(shiftEndDate))
+
+          console.log('Shift active status:', {
+            shiftType: shift.shift_type,
+            isActive,
+            shiftStartDate: shiftStartDate.format('YYYY-MM-DD'),
+            shiftEndDate: shiftEndDate?.format('YYYY-MM-DD'),
+            currentDate: now.format('YYYY-MM-DD')
+          })
+
+          if (!isActive) {
+            return null
           }
 
           const timing = {
