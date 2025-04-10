@@ -62,7 +62,7 @@ const registerServiceWorker = async () => {
 	window.frappePushNotification = new FrappePushNotification("hrms")
 
 	if ("serviceWorker" in navigator) {
-		let serviceWorkerURL = "/assets/hrms/frontend/sw.js"
+		let serviceWorkerURL = "/sw.js"
 		let config = ""
 
 		try {
@@ -77,8 +77,11 @@ const registerServiceWorker = async () => {
 		navigator.serviceWorker
 			.register(serviceWorkerURL, {
 				type: "classic",
+				scope: "/"
 			})
 			.then((registration) => {
+				console.log("Service Worker registered with scope:", registration.scope)
+				
 				if (config) {
 					window.frappePushNotification.initialize(registration).then(() => {
 						console.log("Frappe Push Notification initialized")

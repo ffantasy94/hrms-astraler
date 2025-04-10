@@ -1,0 +1,15 @@
+{
+  "name": "Astraler HR",
+  "short_name": "HRMS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4285f4",
+  "icons": [
+    {
+      "src": "/assets/hrms/manifest/astraler-hr-favicon-196.png",
+      "sizes": "196x196",
+      "type": "image/png"
+    }
+  ]
+} 

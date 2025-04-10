@@ -134,6 +134,16 @@ class LocationService {
 
   async updateShiftTimings() {
     console.log('Updating shift timings...')
+    
+    // Check if Service Worker is available
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      // Send updated shift timings to Service Worker
+      navigator.serviceWorker.controller.postMessage({
+        type: 'UPDATE_SHIFT_TIMINGS',
+        shiftTimings: this.shiftTimings
+      })
+    }
+    
     try {
       const now = dayjs()
       
@@ -332,31 +342,77 @@ class LocationService {
 
   startLocationTracking() {
     console.log('Starting location tracking')
+    
+    // Check if Service Worker is available
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      console.log('Using Service Worker for location tracking')
+      
+      // Send message to Service Worker to start tracking
+      navigator.serviceWorker.controller.postMessage({
+        type: 'START_TRACKING',
+        employee: this.employee,
+        shiftTimings: this.shiftTimings
+      })
+      
+      // Listen for messages from Service Worker
+      navigator.serviceWorker.addEventListener('message', this.handleServiceWorkerMessage.bind(this))
+    } else {
+      console.log('Service Worker not available, using legacy tracking')
+      this.startLegacyLocationTracking()
+    }
+  }
+  
+  // Legacy tracking method (current implementation)
+  startLegacyLocationTracking() {
     if (this.isIOS()) {
       this.setupIOSLocationTracking()
     } else {
-      // For Android and other platforms, use watchPosition
+      // For Android and other platforms, use watchPosition with background options
       this.watchId = navigator.geolocation.watchPosition(
         this.handlePositionUpdate.bind(this),
         this.handleError.bind(this),
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+          timeout: 30000, // Increased timeout for better background operation
+          maximumAge: 0,
+          // These options help with background operation
+          distanceFilter: 10, // Only update if moved 10 meters (if supported)
+          forceRequestLocation: true // Force location updates (if supported)
         }
       )
       console.log('Started watchPosition with ID:', this.watchId)
     }
   }
-
+  
+  // Handle messages from Service Worker
+  handleServiceWorkerMessage(event) {
+    const data = event.data
+    
+    if (data.type === 'CHECK_IN_OUT') {
+      console.log('Received check-in/out request from Service Worker:', data)
+      this.handlePositionUpdate({
+        coords: {
+          latitude: data.data.latitude,
+          longitude: data.data.longitude
+        }
+      })
+    } else if (data.type === 'TRACKING_STARTED') {
+      console.log('Tracking started by Service Worker:', data)
+    } else if (data.type === 'TRACKING_STOPPED') {
+      console.log('Tracking stopped by Service Worker')
+    }
+  }
+  
   setupIOSLocationTracking() {
     console.log('Setting up iOS location tracking')
     if (this.locationCheckInterval) {
       clearInterval(this.locationCheckInterval)
     }
 
+    // Initial check
     this.checkLocation()
 
+    // Set up more frequent checks for iOS (every 2 minutes)
     this.locationCheckInterval = setInterval(() => {
       if (this.shouldTrackLocation()) {
         console.log('Checking location (iOS interval)')
@@ -366,7 +422,7 @@ class LocationService {
         this.stopLocationTracking()
         this.scheduleNextCheck()
       }
-    }, 120000)
+    }, 120000) // 2 minutes
   }
 
   async checkLocation() {
@@ -382,7 +438,7 @@ class LocationService {
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
+          timeout: 30000, // Increased timeout for better background operation
           maximumAge: 0
         }
       )
@@ -450,11 +506,26 @@ class LocationService {
 
   stopLocationTracking() {
     console.log('Stopping location tracking')
+    
+    // Check if Service Worker is available
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      // Send message to Service Worker to stop tracking
+      navigator.serviceWorker.controller.postMessage({
+        type: 'STOP_TRACKING'
+      })
+    } else {
+      // Legacy stop tracking
+      this.stopLegacyLocationTracking()
+    }
+  }
+  
+  // Legacy stop tracking method
+  stopLegacyLocationTracking() {
     if (this.watchId) {
       navigator.geolocation.clearWatch(this.watchId)
       this.watchId = null
     }
-
+    
     if (this.locationCheckInterval) {
       clearInterval(this.locationCheckInterval)
       this.locationCheckInterval = null

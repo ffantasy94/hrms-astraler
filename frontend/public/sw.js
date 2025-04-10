@@ -12,6 +12,12 @@ cleanupOutdatedCaches()
 
 const jsonConfig = new URL(location).searchParams.get("config")
 
+// Variables for location tracking
+let locationWatchId = null;
+let checkInInterval = null;
+let employeeData = null;
+let shiftTimings = [];
+
 // Firebase config initialization
 try {
 	const firebaseApp = initializeApp(JSON.parse(jsonConfig))
@@ -57,6 +63,161 @@ try {
 	}
 } catch (error) {
 	console.log("Failed to initialize Firebase", error)
+}
+
+// Listen for messages from the client
+self.addEventListener('message', event => {
+  const data = event.data;
+  
+  if (data.type === 'START_TRACKING') {
+    console.log('Received START_TRACKING message', data);
+    startLocationTracking(data.employee, data.shiftTimings);
+  } else if (data.type === 'STOP_TRACKING') {
+    console.log('Received STOP_TRACKING message');
+    stopLocationTracking();
+  } else if (data.type === 'UPDATE_SHIFT_TIMINGS') {
+    console.log('Received UPDATE_SHIFT_TIMINGS message', data);
+    shiftTimings = data.shiftTimings;
+  }
+});
+
+// Start location tracking
+function startLocationTracking(employee, timings) {
+  console.log('Starting location tracking in Service Worker');
+  
+  // Save employee data and shift timings
+  employeeData = employee;
+  shiftTimings = timings;
+  
+  // Start watching position
+  if ('geolocation' in self) {
+    locationWatchId = self.geolocation.watchPosition(
+      handlePositionUpdate,
+      handleError,
+      {
+        enableHighAccuracy: true,
+        timeout: 30000,
+        maximumAge: 0
+      }
+    );
+    
+    // Set up interval to check shift timings
+    checkInInterval = setInterval(checkShiftTimings, 60000); // Check every minute
+    
+    // Notify clients that tracking has started
+    notifyClients({
+      type: 'TRACKING_STARTED',
+      data: { employee: employeeData }
+    });
+  } else {
+    console.error('Geolocation is not supported in this environment');
+  }
+}
+
+// Stop location tracking
+function stopLocationTracking() {
+  console.log('Stopping location tracking in Service Worker');
+  
+  if (locationWatchId) {
+    self.geolocation.clearWatch(locationWatchId);
+    locationWatchId = null;
+  }
+  
+  if (checkInInterval) {
+    clearInterval(checkInInterval);
+    checkInInterval = null;
+  }
+  
+  // Notify clients that tracking has stopped
+  notifyClients({
+    type: 'TRACKING_STOPPED'
+  });
+}
+
+// Handle position updates
+function handlePositionUpdate(position) {
+  console.log('Position update in Service Worker:', position);
+  
+  const { latitude, longitude } = position.coords;
+  const now = new Date();
+  
+  // Check if we should perform a check-in/out
+  if (shouldCheckInOut(now, latitude, longitude)) {
+    // Notify clients to perform check-in/out
+    notifyClients({
+      type: 'CHECK_IN_OUT',
+      data: {
+        latitude,
+        longitude,
+        timestamp: now.toISOString()
+      }
+    });
+  }
+}
+
+// Check if we should perform a check-in/out
+function shouldCheckInOut(now, latitude, longitude) {
+  if (!employeeData || !shiftTimings || shiftTimings.length === 0) {
+    return false;
+  }
+  
+  // Find the current shift
+  const currentShift = shiftTimings.find(shift => {
+    const shiftStart = new Date(shift.start);
+    const shiftEnd = new Date(shift.end);
+    return now >= shiftStart && now <= shiftEnd;
+  });
+  
+  if (!currentShift) {
+    return false;
+  }
+  
+  // Check if we're in the check-in or check-out window
+  const checkinStart = new Date(currentShift.checkinStart);
+  const checkinEnd = new Date(currentShift.checkinEnd);
+  const checkoutStart = new Date(currentShift.checkoutStart);
+  const checkoutEnd = new Date(currentShift.checkoutEnd);
+  
+  return (now >= checkinStart && now <= checkinEnd) || 
+         (now >= checkoutStart && now <= checkoutEnd);
+}
+
+// Check shift timings periodically
+function checkShiftTimings() {
+  const now = new Date();
+  
+  // Check if any shift is active
+  const activeShift = shiftTimings.find(shift => {
+    const shiftStart = new Date(shift.start);
+    const shiftEnd = new Date(shift.end);
+    return now >= shiftStart && now <= shiftEnd;
+  });
+  
+  if (!activeShift) {
+    // No active shift, stop tracking
+    stopLocationTracking();
+  }
+}
+
+// Handle geolocation errors
+function handleError(error) {
+  console.error('Geolocation error in Service Worker:', error);
+  
+  // Try again after a delay
+  setTimeout(() => {
+    if (employeeData && shiftTimings.length > 0) {
+      startLocationTracking(employeeData, shiftTimings);
+    }
+  }, 60000); // Try again after 1 minute
+}
+
+// Notify all clients
+function notifyClients(message) {
+  self.clients.matchAll().then(clients => {
+    clients.forEach(client => {
+      client.postMessage(message);
+    });
+  });
 }
 
 self.skipWaiting()
