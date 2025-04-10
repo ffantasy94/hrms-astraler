@@ -118,19 +118,30 @@ class LocationService {
         filters: {
           employee: this.employee.name,
           status: 'Active',
-          docstatus: 1
+          docstatus: 1,
+          // Add date filter to get current assignments
+          start_date: ['<=', dayjs().format('YYYY-MM-DD')],
+          end_date: ['is', 'not set']
         },
         fields: ['name', 'shift_type', 'start_date', 'end_date', 'status']
       })
 
       console.log('Shift assignments response:', response)
 
-      if (response?.message?.length) {
+      // Handle both array response and message.result response formats
+      const assignments = Array.isArray(response) ? response : 
+                         (response?.message?.length ? response.message : 
+                         (response?.result?.length ? response.result : []))
+
+      console.log('Processed assignments:', assignments)
+
+      if (assignments?.length) {
         // Get shift type details for each assignment
-        const shiftPromises = response.message.map(assignment => 
+        const shiftPromises = assignments.map(assignment => 
           this.shiftTypeResource.submit({
             doctype: 'Shift Type',
-            name: assignment.shift_type
+            name: assignment.shift_type,
+            fields: ['name', 'start_time', 'end_time']
           })
         )
 
@@ -138,21 +149,35 @@ class LocationService {
         console.log('Shift types:', shiftTypes)
 
         // Convert shift assignments to timings
-        this.shiftTimings = response.message.map((assignment, index) => {
-          const shiftType = shiftTypes[index]?.message
-          if (!shiftType) return null
+        this.shiftTimings = assignments.map((assignment, index) => {
+          const shiftType = shiftTypes[index]?.message || shiftTypes[index]?.result
+          if (!shiftType) {
+            console.log('No shift type found for assignment:', assignment)
+            return null
+          }
+
+          console.log('Processing shift type:', shiftType)
 
           const startTime = shiftType.start_time
           const endTime = shiftType.end_time
+          
+          if (!startTime || !endTime) {
+            console.log('Invalid shift times:', { startTime, endTime })
+            return null
+          }
+
           const [startHour, startMinute] = startTime.split(':')
           const [endHour, endMinute] = endTime.split(':')
 
-          const start = dayjs()
+          // Always use today's date for the shift
+          const baseDate = dayjs()
+
+          const start = baseDate
             .hour(parseInt(startHour))
             .minute(parseInt(startMinute))
             .second(0)
           
-          const end = dayjs()
+          const end = baseDate
             .hour(parseInt(endHour))
             .minute(parseInt(endMinute))
             .second(0)
@@ -162,15 +187,30 @@ class LocationService {
             end.add(1, 'day')
           }
 
-          return {
+          const timing = {
             start,
             end,
             checkinBuffer: 30,
-            checkoutBuffer: 30
+            checkoutBuffer: 30,
+            shiftType: shiftType.name,
+            assignment: assignment.name
           }
+
+          console.log('Created shift timing:', {
+            shiftType: timing.shiftType,
+            assignment: timing.assignment,
+            start: timing.start.format('YYYY-MM-DD HH:mm:ss'),
+            end: timing.end.format('YYYY-MM-DD HH:mm:ss'),
+            checkinBuffer: timing.checkinBuffer,
+            checkoutBuffer: timing.checkoutBuffer
+          })
+
+          return timing
         }).filter(Boolean)
 
         console.log('Updated shift timings:', this.shiftTimings.map(shift => ({
+          shiftType: shift.shiftType,
+          assignment: shift.assignment,
           start: shift.start.format('YYYY-MM-DD HH:mm:ss'),
           end: shift.end.format('YYYY-MM-DD HH:mm:ss'),
           checkinBuffer: shift.checkinBuffer,
@@ -213,6 +253,8 @@ class LocationService {
       
       const isInWindow = now.isAfter(checkinStart) && now.isBefore(checkoutEnd)
       console.log('Checking time window:', {
+        shiftType: shift.shiftType,
+        assignment: shift.assignment,
         now: now.format('YYYY-MM-DD HH:mm:ss'),
         checkinStart: checkinStart.format('YYYY-MM-DD HH:mm:ss'),
         checkoutEnd: checkoutEnd.format('YYYY-MM-DD HH:mm:ss'),
