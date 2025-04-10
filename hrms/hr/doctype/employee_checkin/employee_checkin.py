@@ -5,7 +5,8 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, get_datetime, timedelta
+from frappe.utils import cint, get_datetime
+from datetime import timedelta
 
 from hrms.hr.doctype.shift_assignment.shift_assignment import get_actual_start_end_datetime_of_shift
 from hrms.hr.utils import (
