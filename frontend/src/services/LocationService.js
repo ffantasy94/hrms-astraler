@@ -133,105 +133,84 @@ class LocationService {
   }
 
   async updateShiftTimings() {
-    console.log('Updating shift timings...')
-    
-    // Check if Service Worker is available
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      // Send updated shift timings to Service Worker
-      navigator.serviceWorker.controller.postMessage({
-        type: 'UPDATE_SHIFT_TIMINGS',
-        shiftTimings: this.shiftTimings
-      })
-    }
-    
     try {
-      const now = dayjs()
+      console.log('Updating shift timings...')
       
-      // Get shifts for the employee with current date
+      // Get current date in YYYY-MM-DD format
+      const today = dayjs().format('YYYY-MM-DD')
+      
+      // Get shifts for current employee
       const response = await this.shiftResource.submit({
-        employee: this.employee.name,
-        date: now.format('YYYY-MM-DD')
+        doctype: 'Shift Assignment',
+        filters: [
+          ['employee', '=', this.employee.name],
+          ['start_date', '<=', today],
+          ['end_date', '>=', today]
+        ],
+        fields: ['name', 'shift_type', 'start_date', 'end_date', 'start_time', 'end_time']
       })
 
       console.log('Shifts response:', response)
-      console.log('Current time:', now.format('YYYY-MM-DD HH:mm:ss'))
-
-      // Handle both array response and message format
-      const shifts = Array.isArray(response) ? response : 
-                    (response?.message?.length ? response.message : [])
-
-      if (!shifts?.length) {
-        console.log('No shifts found for today')
+      
+      if (!response || !response.message) {
+        console.log('No shifts found')
         this.shiftTimings = []
         return
       }
 
-      // Convert shifts to timings
+      const shifts = Array.isArray(response.message) ? response.message : [response.message]
+      const now = dayjs()
+      console.log('Current time:', now.format('YYYY-MM-DD HH:mm:ss'))
+
       this.shiftTimings = shifts.map(shift => {
-        if (!shift.start_time || !shift.end_time) {
-          console.log('Invalid shift data - missing times:', shift)
-          return null
+        // Parse shift times
+        const [startHour, startMinute] = shift.start_time.split(':')
+        const [endHour, endMinute] = shift.end_time.split(':')
+        
+        // Create dayjs objects for shift times
+        const baseDate = dayjs(shift.start_date)
+        const start = baseDate.hour(parseInt(startHour)).minute(parseInt(startMinute)).second(0)
+        let end = baseDate.hour(parseInt(endHour)).minute(parseInt(endMinute)).second(0)
+        
+        // Handle shifts that end the next day
+        if (end.isBefore(start)) {
+          end = end.add(1, 'day')
         }
 
-        // Parse shift times
-        const [startHour, startMinute] = shift.start_time.split(':').map(Number)
-        const [endHour, endMinute] = shift.end_time.split(':').map(Number)
-        
-        // Create shift window using current date
-        const shiftDate = now.startOf('day')
-        const start = shiftDate.hour(startHour).minute(startMinute).second(0)
-        const end = shiftDate.hour(endHour).minute(endMinute).second(0)
-        
-        // If end time is before start time, shift ends next day
-        const adjustedEnd = end.isBefore(start) ? end.add(1, 'day') : end
-        
-        // Calculate check windows with buffer
-        const checkinStart = start.subtract(this.checkinBuffer, 'minutes')
-        const checkoutEnd = adjustedEnd.add(this.checkoutBuffer, 'minutes')
+        // Add buffer times (30 minutes before and after)
+        const checkinStart = start.subtract(30, 'minute')
+        const checkoutEnd = end.add(30, 'minute')
 
-        const timing = {
-          shiftType: shift.shift_type,
+        const processedShift = {
+          type: shift.shift_type,
           assignment: shift.name,
-          start: start,
-          end: adjustedEnd,
+          start: start.format('HH:mm'),
+          end: end.format('HH:mm'),
+          checkinWindow: `${checkinStart.format('HH:mm')} - ${start.format('HH:mm')}`,
+          checkoutWindow: `${end.format('HH:mm')} - ${checkoutEnd.format('HH:mm')}`,
           checkinStart,
           checkoutEnd,
-          checkinBuffer: this.checkinBuffer,
-          checkoutBuffer: this.checkoutBuffer
+          startDate: shift.start_date,
+          endDate: shift.end_date
         }
 
-        console.log('Processed shift:', {
-          type: timing.shiftType,
-          assignment: timing.assignment,
-          start: timing.start.format('HH:mm'),
-          end: timing.end.format('HH:mm'),
-          checkinWindow: `${timing.checkinStart.format('HH:mm')} - ${timing.start.format('HH:mm')}`,
-          checkoutWindow: `${timing.end.format('HH:mm')} - ${timing.checkoutEnd.format('HH:mm')}`
-        })
+        console.log('Processed shift:', processedShift)
+        return processedShift
+      })
 
-        return timing
-      }).filter(Boolean)
-
-      if (this.shiftTimings.length) {
-        console.log(`Found ${this.shiftTimings.length} valid shifts for today`)
-      } else {
-        console.log('No valid shifts found after processing')
-      }
-
-      this.retryCount = 0 // Reset retry count on success
+      console.log('Found', this.shiftTimings.length, 'valid shifts for today')
       
+      // Schedule next update at midnight
+      const midnight = dayjs().endOf('day')
+      const timeUntilMidnight = midnight.diff(dayjs())
+      
+      setTimeout(() => {
+        this.updateShiftTimings()
+      }, timeUntilMidnight)
+
     } catch (error) {
-      console.error('Error fetching shift timings:', error)
+      console.error('Error updating shift timings:', error)
       this.shiftTimings = []
-      
-      if (this.retryCount < this.maxRetries) {
-        this.retryCount++
-        console.log(`Retrying shift timings update (${this.retryCount}/${this.maxRetries})...`)
-        setTimeout(() => this.updateShiftTimings(), 5000)
-      } else {
-        console.log('Max retries reached, will try again at next check')
-        this.retryCount = 0
-      }
     }
   }
 

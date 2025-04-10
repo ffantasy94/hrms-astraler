@@ -62,7 +62,7 @@ async function registerServiceWorker() {
 	if ('serviceWorker' in navigator) {
 		try {
 			// Get config first
-			const config = await frappe.getConfig()
+			const config = await window.frappePushNotification.fetchWebConfig()
 			if (!config) {
 				console.warn('No config available, skipping service worker registration')
 				return
