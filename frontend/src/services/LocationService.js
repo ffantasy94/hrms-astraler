@@ -113,9 +113,15 @@ class LocationService {
 
       console.log('Shifts response:', response)
 
-      if (response?.message?.length) {
+      // Handle both array response and message format
+      const shifts = Array.isArray(response) ? response : 
+                    (response?.message?.length ? response.message : [])
+
+      console.log('Processed shifts:', shifts)
+
+      if (shifts?.length) {
         // Convert shifts to timings
-        this.shiftTimings = response.message.map(shift => {
+        this.shiftTimings = shifts.map(shift => {
           console.log('Processing shift:', shift)
 
           if (!shift.start_time || !shift.end_time || !shift.start_date) {
@@ -125,6 +131,7 @@ class LocationService {
 
           // Parse the date and time strings
           const [startHour, startMinute] = shift.start_time.split(':')
+          const endTime = shift.end_time
           const [endHour, endMinute] = endTime.split(':')
 
           // Use shift start_date as base date
@@ -174,18 +181,18 @@ class LocationService {
 
         if (this.shiftTimings.length === 0) {
           console.log('No valid shifts found in response')
+        } else {
+          console.log('Updated shift timings:', this.shiftTimings.map(shift => ({
+            shiftType: shift.shiftType,
+            assignment: shift.assignment,
+            startDate: shift.startDate,
+            endDate: shift.endDate,
+            start: shift.start.format('YYYY-MM-DD HH:mm:ss'),
+            end: shift.end.format('YYYY-MM-DD HH:mm:ss'),
+            checkinBuffer: shift.checkinBuffer,
+            checkoutBuffer: shift.checkoutBuffer
+          })))
         }
-
-        console.log('Updated shift timings:', this.shiftTimings.map(shift => ({
-          shiftType: shift.shiftType,
-          assignment: shift.assignment,
-          startDate: shift.startDate,
-          endDate: shift.endDate,
-          start: shift.start.format('YYYY-MM-DD HH:mm:ss'),
-          end: shift.end.format('YYYY-MM-DD HH:mm:ss'),
-          checkinBuffer: shift.checkinBuffer,
-          checkoutBuffer: shift.checkoutBuffer
-        })))
 
         this.retryCount = 0 // Reset retry count on success
       } else {
@@ -257,7 +264,9 @@ class LocationService {
         checkoutEnd: checkoutEnd.format('YYYY-MM-DD HH:mm:ss'),
         isInWindow,
         shiftStart: todayStart.format('YYYY-MM-DD HH:mm:ss'),
-        shiftEnd: todayEnd.format('YYYY-MM-DD HH:mm:ss')
+        shiftEnd: todayEnd.format('YYYY-MM-DD HH:mm:ss'),
+        raw_start: shift.start.format('HH:mm:ss'),
+        raw_end: shift.end.format('HH:mm:ss')
       })
       
       return isInWindow
