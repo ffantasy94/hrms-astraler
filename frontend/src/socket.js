@@ -1,31 +1,50 @@
 import { io } from "socket.io-client"
-import { socketio_port } from "../../../../sites/common_site_config.json"
-
-import { getCachedListResource } from "frappe-ui/src/resources/listResource"
-import { getCachedResource } from "frappe-ui/src/resources/resources"
 
 export function initSocket() {
-	let host = window.location.hostname
-	let siteName = window.site_name
-	let port = window.location.port ? `:${socketio_port}` : ""
-	let protocol = port ? "http" : "https"
-	let url = `${protocol}://${host}${port}/${siteName}`
-	let socket = io(url, {
-		withCredentials: true,
-		reconnectionAttempts: 5,
-	})
+	// Check if we're in a browser environment
+	if (typeof window === 'undefined') {
+		return null;
+	}
 
-	socket.on("hrms:refetch_resource", (data) => {
-		if (data.cache_key) {
-			let resource =
-				getCachedResource(data.cache_key) ||
-				getCachedListResource(data.cache_key)
+	try {
+		let host = window.location.hostname;
+		let siteName = window.site_name || '';
+		let protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+		
+		// Use the current domain for socket connection
+		let url = `${protocol}://${host}`;
+		
+		console.log('Initializing socket connection to:', url);
+		
+		let socket = io(url, {
+			withCredentials: true,
+			reconnectionAttempts: 5,
+			path: '/socket.io'
+		});
 
-			if (resource) {
-				resource.reload()
+		socket.on("connect", () => {
+			console.log('Socket connected successfully');
+		});
+
+		socket.on("connect_error", (error) => {
+			console.warn('Socket connection error:', error.message);
+		});
+
+		socket.on("hrms:refetch_resource", (data) => {
+			console.log('Received refetch resource event:', data);
+			if (data.cache_key) {
+				let resource = window.frappe?.getCachedResource?.(data.cache_key) ||
+							  window.frappe?.getCachedListResource?.(data.cache_key);
+
+				if (resource) {
+					resource.reload();
+				}
 			}
-		}
-	})
+		});
 
-	return socket
+		return socket;
+	} catch (error) {
+		console.error('Error initializing socket:', error);
+		return null;
+	}
 }

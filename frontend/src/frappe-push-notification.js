@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
+import { frappeRequest } from "frappe-ui";
 
 class FrappePushNotification {
   constructor() {
@@ -14,19 +15,14 @@ class FrappePushNotification {
   async initialize() {
     try {
       // Fetch Firebase config from server
-      const response = await frappe.request({
+      const response = await frappeRequest({
         url: 'hrms.api.get_firebase_config',
-        method: 'GET',
-        callback: (r) => {
-          if (r.message) {
-            this.config = r.message;
-            return this.config;
-          }
-          return null;
-        }
+        method: 'GET'
       });
 
-      if (!this.config) {
+      if (response && response.message) {
+        this.config = response.message;
+      } else {
         throw new Error('Failed to fetch Firebase config');
       }
 
@@ -52,18 +48,16 @@ class FrappePushNotification {
   async fetchVapidKey() {
     try {
       // Fetch VAPID key from Frappe backend
-      const response = await frappe.request({
+      const response = await frappeRequest({
         url: 'hrms.api.get_vapid_key',
-        method: 'GET',
-        callback: (r) => {
-          if (r.message && r.message.vapid_key) {
-            this.vapidKey = r.message.vapid_key;
-            return this.vapidKey;
-          }
-          return null;
-        }
+        method: 'GET'
       });
-      return this.vapidKey;
+      
+      if (response && response.message && response.message.vapid_key) {
+        this.vapidKey = response.message.vapid_key;
+        return this.vapidKey;
+      }
+      return null;
     } catch (error) {
       console.error('Error fetching VAPID key:', error);
       return null;
@@ -107,7 +101,7 @@ class FrappePushNotification {
 
   async updateToken(token) {
     try {
-      await frappe.request({
+      await frappeRequest({
         url: 'hrms.api.update_fcm_token',
         method: 'POST',
         body: {

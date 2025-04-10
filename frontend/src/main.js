@@ -153,7 +153,14 @@ router.isReady().then(async () => {
 	}
 
 	await translationsPlugin.isReady();
-	registerServiceWorker()
+	
+	// Register service worker in a try-catch block
+	try {
+		await registerServiceWorker();
+	} catch (error) {
+		console.error('Error registering service worker:', error);
+	}
+	
 	app.mount("#app")
 })
 
