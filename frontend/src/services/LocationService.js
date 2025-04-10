@@ -103,6 +103,11 @@ class LocationService {
     }
   }
 
+  getCurrentTime() {
+    // Get the actual current time
+    return dayjs(new Date())
+  }
+
   async updateShiftTimings() {
     console.log('Updating shift timings...')
     try {
@@ -120,7 +125,9 @@ class LocationService {
       console.log('Processed shifts:', shifts)
 
       if (shifts?.length) {
-        const now = dayjs()
+        const now = this.getCurrentTime()
+        console.log('Current time for shift calculations:', now.format('YYYY-MM-DD HH:mm:ss'))
+        
         // Convert shifts to timings
         this.shiftTimings = shifts.map(shift => {
           console.log('Processing shift:', shift)
@@ -165,7 +172,9 @@ class LocationService {
             isActive,
             shiftStartDate: shiftStartDate.format('YYYY-MM-DD'),
             shiftEndDate: shiftEndDate?.format('YYYY-MM-DD'),
-            currentDate: now.format('YYYY-MM-DD')
+            currentDate: now.format('YYYY-MM-DD'),
+            isAfterStart: now.isAfter(shiftStartDate),
+            isBeforeEnd: !shiftEndDate || now.isBefore(shiftEndDate)
           })
 
           if (!isActive) {
@@ -241,24 +250,10 @@ class LocationService {
       return false
     }
 
-    const now = dayjs()
+    const now = this.getCurrentTime()
     console.log('Current time:', now.format('YYYY-MM-DD HH:mm:ss'))
     
     const shouldTrack = this.shiftTimings.some(shift => {
-      // Check if the shift is still active based on start_date and end_date
-      const isActive = dayjs(shift.startDate).isBefore(now) && 
-                      (!shift.endDate || dayjs(shift.endDate).isAfter(now))
-
-      if (!isActive) {
-        console.log('Shift is not active:', {
-          shift: shift.shiftType,
-          startDate: shift.startDate,
-          endDate: shift.endDate,
-          now: now.format('YYYY-MM-DD')
-        })
-        return false
-      }
-
       // Get today's shift times
       const todayStart = now.hour(shift.start.hour())
                            .minute(shift.start.minute())
@@ -302,7 +297,7 @@ class LocationService {
       return null
     }
 
-    const now = dayjs()
+    const now = this.getCurrentTime()
     let nextTime = null
 
     this.shiftTimings.forEach(shift => {
@@ -364,7 +359,7 @@ class LocationService {
       return
     }
 
-    const delay = nextTime.diff(dayjs())
+    const delay = nextTime.diff(this.getCurrentTime())
     if (delay <= 0) {
       console.log('Next check time is in the past')
       return
