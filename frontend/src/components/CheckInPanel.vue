@@ -133,7 +133,7 @@ const nextAction = computed(() => {
 		: { action: "IN", label: __("Check In") }
 })
 
-const isAutoTracking = ref(false)
+const isAutoTracking = ref(localStorage.getItem('autoCheckinEnabled') === 'true')
 
 function handleLocationSuccess(position) {
 	latitude.value = position.coords.latitude
@@ -205,37 +205,84 @@ const submitLog = (logType) => {
 function toggleAutoTracking(event) {
 	if (event.target.checked) {
 		if (settings.data?.allow_geolocation_tracking) {
-			LocationService.startTracking(employee.data)
-			toast({
-				title: __("Auto-tracking Enabled"),
-				text: __("Your location will be monitored for automatic check-in/out"),
-				icon: "check-circle",
-				position: "bottom-center",
-				iconClasses: "text-green-500",
-			})
+			if (LocationService.isIOS()) {
+				navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+					if (result.state === 'granted') {
+						startLocationTracking()
+					} else {
+						navigator.geolocation.getCurrentPosition(
+							() => startLocationTracking(),
+							(error) => {
+								console.error('Permission denied:', error)
+								isAutoTracking.value = false
+								showPermissionError()
+							}
+						)
+					}
+				})
+			} else {
+				startLocationTracking()
+			}
 		} else {
 			isAutoTracking.value = false
-			toast({
-				title: __("Error"),
-				text: __("Geolocation tracking is not enabled in HR Settings"),
-				icon: "alert-circle",
-				position: "bottom-center",
-				iconClasses: "text-red-500",
-			})
+			showGeolocationNotEnabled()
 		}
 	} else {
 		LocationService.stopTracking()
-		toast({
-			title: __("Auto-tracking Disabled"),
-			text: __("Automatic check-in/out has been disabled"),
-			icon: "info",
-			position: "bottom-center",
-			iconClasses: "text-blue-500",
-		})
+		showTrackingDisabled()
 	}
 }
 
+function startLocationTracking() {
+	LocationService.startTracking(employee.data)
+	showTrackingEnabled()
+}
+
+function showPermissionError() {
+	toast({
+		title: __("Permission Required"),
+		text: __("Please allow location access to enable automatic check-in/out"),
+		icon: "alert-circle",
+		position: "bottom-center",
+		iconClasses: "text-red-500",
+	})
+}
+
+function showGeolocationNotEnabled() {
+	toast({
+		title: __("Error"),
+		text: __("Geolocation tracking is not enabled in HR Settings"),
+		icon: "alert-circle",
+		position: "bottom-center",
+		iconClasses: "text-red-500",
+	})
+}
+
+function showTrackingEnabled() {
+	toast({
+		title: __("Auto-tracking Enabled"),
+		text: __("Your location will be monitored for automatic check-in/out"),
+		icon: "check-circle",
+		position: "bottom-center",
+		iconClasses: "text-green-500",
+	})
+}
+
+function showTrackingDisabled() {
+	toast({
+		title: __("Auto-tracking Disabled"),
+		text: __("Automatic check-in/out has been disabled"),
+		icon: "info",
+		position: "bottom-center",
+		iconClasses: "text-blue-500",
+	})
+}
+
 onMounted(() => {
+	if (isAutoTracking.value) {
+		LocationService.restoreTracking()
+	}
+	
 	socket.emit("doctype_subscribe", DOCTYPE)
 	socket.on("list_update", (data) => {
 		if (data.doctype == DOCTYPE) {
@@ -247,6 +294,5 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	socket.emit("doctype_unsubscribe", DOCTYPE)
 	socket.off("list_update")
-	LocationService.stopTracking()
 })
 </script>
