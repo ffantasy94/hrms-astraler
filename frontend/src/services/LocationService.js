@@ -277,24 +277,63 @@ class LocationService {
   }
 
   getNextCheckTime() {
-    if (!this.shiftTimings?.length) return null
+    if (!this.shiftTimings?.length) {
+      console.log('No shift timings available for next check calculation')
+      return null
+    }
 
     const now = dayjs()
     let nextTime = null
 
     this.shiftTimings.forEach(shift => {
-      const checkinStart = shift.start.subtract(shift.checkinBuffer, 'minute')
-      const checkoutEnd = shift.end.add(shift.checkoutBuffer, 'minute')
+      // Get today's times
+      const todayStart = now.hour(shift.start.hour())
+                           .minute(shift.start.minute())
+                           .second(0)
+      const todayEnd = now.hour(shift.end.hour())
+                         .minute(shift.end.minute())
+                         .second(0)
 
-      if (now.isBefore(checkinStart) && (!nextTime || checkinStart.isBefore(nextTime))) {
-        nextTime = checkinStart
+      // If end is before start, it means shift goes into next day
+      if (todayEnd.isBefore(todayStart)) {
+        todayEnd.add(1, 'day')
       }
-      if (now.isBefore(checkoutEnd) && (!nextTime || checkoutEnd.isBefore(nextTime))) {
-        nextTime = checkoutEnd
+
+      const todayCheckinStart = todayStart.subtract(shift.checkinBuffer, 'minute')
+      const todayCheckoutEnd = todayEnd.add(shift.checkoutBuffer, 'minute')
+
+      // If we're past today's window, look at tomorrow
+      if (now.isAfter(todayCheckoutEnd)) {
+        const tomorrowStart = todayStart.add(1, 'day')
+        const tomorrowEnd = todayEnd.add(1, 'day')
+        const tomorrowCheckinStart = todayCheckinStart.add(1, 'day')
+        const tomorrowCheckoutEnd = todayCheckoutEnd.add(1, 'day')
+
+        console.log('Calculating tomorrow times:', {
+          checkinStart: tomorrowCheckinStart.format('YYYY-MM-DD HH:mm:ss'),
+          checkoutEnd: tomorrowCheckoutEnd.format('YYYY-MM-DD HH:mm:ss')
+        })
+
+        if (!nextTime || tomorrowCheckinStart.isBefore(nextTime)) {
+          nextTime = tomorrowCheckinStart
+        }
+      } else {
+        // Still within or before today's window
+        if (now.isBefore(todayCheckinStart) && (!nextTime || todayCheckinStart.isBefore(nextTime))) {
+          nextTime = todayCheckinStart
+        }
+        if (now.isBefore(todayCheckoutEnd) && (!nextTime || todayCheckoutEnd.isBefore(nextTime))) {
+          nextTime = todayCheckoutEnd
+        }
       }
     })
 
-    console.log('Next check time:', nextTime?.format('YYYY-MM-DD HH:mm:ss'))
+    if (nextTime) {
+      console.log('Next check time calculated:', nextTime.format('YYYY-MM-DD HH:mm:ss'))
+    } else {
+      console.log('Could not determine next check time')
+    }
+    
     return nextTime
   }
 
