@@ -5,7 +5,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, get_datetime
+from frappe.utils import cint, get_datetime, timedelta
 
 from hrms.hr.doctype.shift_assignment.shift_assignment import get_actual_start_end_datetime_of_shift
 from hrms.hr.utils import (
@@ -168,6 +168,12 @@ def add_log_based_on_employee_field(
 			)
 		)
 
+	# For automatic check-in/out based on location
+	if device_id == "AUTO_LOCATION" and latitude and longitude:
+		log_type = determine_log_type_from_location(employee.name, timestamp, latitude, longitude)
+		if not log_type:
+			return None
+
 	doc = frappe.new_doc("Employee Checkin")
 	doc.employee = employee.name
 	doc.employee_name = employee.employee_name
@@ -181,6 +187,75 @@ def add_log_based_on_employee_field(
 	doc.insert()
 
 	return doc
+
+
+def determine_log_type_from_location(employee, timestamp, latitude, longitude):
+	"""Determine if the employee should be checked in or out based on their location and shift"""
+	
+	# Get active shift assignments for the employee
+	shift_assignments = frappe.get_all(
+		"Shift Assignment",
+		filters={
+			"employee": employee,
+			"start_date": ["<=", timestamp],
+			"shift_location": ["is", "set"],
+			"docstatus": 1,
+			"status": "Active",
+		},
+		or_filters=[["end_date", ">=", timestamp], ["end_date", "is", "not set"]],
+		fields=["shift_type", "shift_location"]
+	)
+
+	if not shift_assignments:
+		return None
+
+	# Get the last check-in/out for the employee
+	last_log = frappe.get_all(
+		"Employee Checkin",
+		filters={"employee": employee},
+		fields=["log_type", "time"],
+		order_by="time desc",
+		limit=1
+	)
+
+	last_log_type = last_log[0].log_type if last_log else None
+	current_datetime = get_datetime(timestamp)
+
+	for assignment in shift_assignments:
+		shift_type = frappe.get_doc("Shift Type", assignment.shift_type)
+		shift_location = frappe.get_doc("Shift Location", assignment.shift_location)
+		
+		# Get actual shift timings
+		actual_shift_timings = get_actual_start_end_datetime_of_shift(
+			employee, current_datetime, True, shift_type
+		)
+		
+		if not actual_shift_timings:
+			continue
+
+		# Calculate distance from shift location
+		distance = get_distance_between_coordinates(
+			shift_location.latitude,
+			shift_location.longitude,
+			latitude,
+			longitude
+		)
+
+		# If within checkin radius
+		if distance <= shift_location.checkin_radius:
+			# If no previous log, or last log was OUT, and we're near shift start time
+			shift_start_buffer = timedelta(minutes=30)  # Allow check-in 30 mins before shift
+			if (not last_log_type or last_log_type == "OUT") and \
+				current_datetime >= (actual_shift_timings.actual_start - shift_start_buffer):
+				return "IN"
+			
+			# If last log was IN, and we're near shift end time
+			shift_end_buffer = timedelta(minutes=30)  # Allow check-out 30 mins after shift
+			if last_log_type == "IN" and \
+				current_datetime <= (actual_shift_timings.actual_end + shift_end_buffer):
+				return "OUT"
+
+	return None
 
 
 @frappe.whitelist()

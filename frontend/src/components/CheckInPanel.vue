@@ -12,10 +12,20 @@
 					<span @click="navigate" class="underline">View List</span>
 				</router-link>
 			</div>
+
+			<div class="flex items-center justify-between mt-4 mb-2">
+				<span class="text-sm font-medium text-gray-700">{{ __("Auto Check-in/out") }}</span>
+				<label class="relative inline-flex items-center cursor-pointer">
+					<input type="checkbox" v-model="isAutoTracking" class="sr-only peer" @change="toggleAutoTracking">
+					<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+				</label>
+			</div>
+
 			<Button
-				class="mt-4 mb-1 drop-shadow-sm py-5 text-base"
+				class="mt-2 mb-1 drop-shadow-sm py-5 text-base"
 				id="open-checkin-modal"
 				@click="handleEmployeeCheckin"
+				:disabled="isAutoTracking"
 			>
 				<template #prefix>
 					<FeatherIcon
@@ -80,7 +90,7 @@
 import { createResource, createListResource, toast, FeatherIcon } from "frappe-ui"
 import { computed, inject, ref, onMounted, onBeforeUnmount } from "vue"
 import { IonModal, modalController } from "@ionic/vue"
-
+import LocationService from '@/services/LocationService'
 import { formatTimestamp } from "@/utils/formatters"
 
 const DOCTYPE = "Employee Checkin"
@@ -122,6 +132,8 @@ const nextAction = computed(() => {
 		? { action: "OUT", label: __("Check Out") }
 		: { action: "IN", label: __("Check In") }
 })
+
+const isAutoTracking = ref(false)
 
 function handleLocationSuccess(position) {
 	latitude.value = position.coords.latitude
@@ -190,6 +202,39 @@ const submitLog = (logType) => {
 	)
 }
 
+function toggleAutoTracking(event) {
+	if (event.target.checked) {
+		if (settings.data?.allow_geolocation_tracking) {
+			LocationService.startTracking(employee.data)
+			toast({
+				title: __("Auto-tracking Enabled"),
+				text: __("Your location will be monitored for automatic check-in/out"),
+				icon: "check-circle",
+				position: "bottom-center",
+				iconClasses: "text-green-500",
+			})
+		} else {
+			isAutoTracking.value = false
+			toast({
+				title: __("Error"),
+				text: __("Geolocation tracking is not enabled in HR Settings"),
+				icon: "alert-circle",
+				position: "bottom-center",
+				iconClasses: "text-red-500",
+			})
+		}
+	} else {
+		LocationService.stopTracking()
+		toast({
+			title: __("Auto-tracking Disabled"),
+			text: __("Automatic check-in/out has been disabled"),
+			icon: "info",
+			position: "bottom-center",
+			iconClasses: "text-blue-500",
+		})
+	}
+}
+
 onMounted(() => {
 	socket.emit("doctype_subscribe", DOCTYPE)
 	socket.on("list_update", (data) => {
@@ -202,5 +247,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	socket.emit("doctype_unsubscribe", DOCTYPE)
 	socket.off("list_update")
+	LocationService.stopTracking()
 })
 </script>
