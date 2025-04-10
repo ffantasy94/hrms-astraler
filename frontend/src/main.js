@@ -61,6 +61,12 @@ app.provide("$dayjs", dayjs)
 async function registerServiceWorker() {
 	if ('serviceWorker' in navigator) {
 		try {
+			// Check if frappePushNotification is available
+			if (!window.frappePushNotification) {
+				console.warn('frappePushNotification not available, skipping service worker registration')
+				return
+			}
+
 			// Get config first
 			const config = await window.frappePushNotification.fetchWebConfig()
 			if (!config) {

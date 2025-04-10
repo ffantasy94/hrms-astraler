@@ -141,13 +141,8 @@ class LocationService {
       
       // Get shifts for current employee
       const response = await this.shiftResource.submit({
-        doctype: 'Shift Assignment',
-        filters: [
-          ['employee', '=', this.employee.name],
-          ['start_date', '<=', today],
-          ['end_date', '>=', today]
-        ],
-        fields: ['name', 'shift_type', 'start_date', 'end_date', 'start_time', 'end_time']
+        employee: this.employee.name,
+        date: today
       })
 
       console.log('Shifts response:', response)
