@@ -390,27 +390,47 @@ class LocationService {
   }
 
   async handlePositionUpdate(position) {
-    const { latitude, longitude } = position.coords
-    console.log('Got location update:', { latitude, longitude })
-    
     try {
+      const { latitude, longitude } = position.coords
+      console.log('Got location update:', { latitude, longitude })
+
+      // Only attempt check-in/out if we have valid coordinates
+      if (!latitude || !longitude) {
+        console.log('Invalid coordinates, skipping check-in/out')
+        return
+      }
+
       console.log('Attempting check-in/out with coordinates')
-      const response = await this.checkinResource.submit({
-        employee_field_value: this.employee.name,
-        employee_fieldname: 'name',
-        timestamp: new Date().toISOString(),
-        latitude,
-        longitude,
-        device_id: 'AUTO_LOCATION',
-        skip_auto_attendance: 0
+      
+      // Get current shift timing for the check-in
+      const now = dayjs()
+      const currentShift = this.shiftTimings.find(shift => {
+        return now.isAfter(shift.checkinStart) && now.isBefore(shift.checkoutEnd)
       })
 
-      if (response) {
-        console.log('Check-in/out response:', response)
-        this.lastCheckinType = response.log_type
-      } else {
-        console.log('No check-in/out created')
+      if (!currentShift) {
+        console.log('No active shift found for check-in/out')
+        return
       }
+
+      // Prepare check-in data
+      const checkInData = {
+        employee_field_value: this.employee.name,
+        employee_fieldname: 'name',
+        timestamp: now.format('YYYY-MM-DD HH:mm:ss'),
+        latitude: latitude.toString(),
+        longitude: longitude.toString(),
+        device_id: 'AUTO_LOCATION',
+        shift_type: currentShift.shiftType,
+        shift_actual_start: currentShift.start.format('YYYY-MM-DD HH:mm:ss'),
+        shift_actual_end: currentShift.end.format('YYYY-MM-DD HH:mm:ss'),
+        skip_auto_attendance: 0
+      }
+
+      console.log('Submitting check-in with data:', checkInData)
+      const response = await this.checkinResource.submit(checkInData)
+      console.log('Check-in response:', response)
+
     } catch (error) {
       console.error('Error creating automatic checkin:', error)
     }
