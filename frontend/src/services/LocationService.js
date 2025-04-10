@@ -11,17 +11,11 @@ class LocationService {
       auto: false,
     })
     this.shiftResource = createResource({
-      url: 'frappe.client.get_list',
-      params: {
-        doctype: 'Shift Assignment',
-        filters: {
-          employee: '',
-          status: 'Active',
-          docstatus: 1
-        },
-        fields: ['name', 'shift_type', 'start_date', 'end_date', 'status'],
-      },
+      url: 'hrms.api.get_shifts',
       auto: false,
+      onError: (error) => {
+        console.error('Shift API error:', error)
+      }
     })
     this.shiftTypeResource = createResource({
       url: 'frappe.client.get',
@@ -112,66 +106,30 @@ class LocationService {
   async updateShiftTimings() {
     console.log('Updating shift timings...')
     try {
-      // First get all active shift assignments
+      // Get shifts for the employee
       const response = await this.shiftResource.submit({
-        doctype: 'Shift Assignment',
-        filters: {
-          employee: this.employee.name,
-          status: 'Active',
-          docstatus: 1,
-          // Add date filter to get current assignments
-          start_date: ['<=', dayjs().format('YYYY-MM-DD')],
-          end_date: ['is', 'not set']
-        },
-        fields: ['name', 'shift_type', 'start_date', 'end_date', 'status']
+        employee: this.employee.name
       })
 
-      console.log('Shift assignments response:', response)
+      console.log('Shifts response:', response)
 
-      // Handle both array response and message.result response formats
-      const assignments = Array.isArray(response) ? response : 
-                         (response?.message?.length ? response.message : 
-                         (response?.result?.length ? response.result : []))
+      if (response?.message?.length) {
+        // Convert shifts to timings
+        this.shiftTimings = response.message.map(shift => {
+          console.log('Processing shift:', shift)
 
-      console.log('Processed assignments:', assignments)
-
-      if (assignments?.length) {
-        // Get shift type details for each assignment
-        const shiftPromises = assignments.map(assignment => 
-          this.shiftTypeResource.submit({
-            doctype: 'Shift Type',
-            name: assignment.shift_type,
-            fields: ['name', 'start_time', 'end_time']
-          })
-        )
-
-        const shiftTypes = await Promise.all(shiftPromises)
-        console.log('Shift types:', shiftTypes)
-
-        // Convert shift assignments to timings
-        this.shiftTimings = assignments.map((assignment, index) => {
-          const shiftType = shiftTypes[index]?.message || shiftTypes[index]?.result
-          if (!shiftType) {
-            console.log('No shift type found for assignment:', assignment)
+          if (!shift.start_time || !shift.end_time || !shift.start_date) {
+            console.log('Invalid shift data:', shift)
             return null
           }
 
-          console.log('Processing shift type:', shiftType)
-
-          const startTime = shiftType.start_time
-          const endTime = shiftType.end_time
-          
-          if (!startTime || !endTime) {
-            console.log('Invalid shift times:', { startTime, endTime })
-            return null
-          }
-
-          const [startHour, startMinute] = startTime.split(':')
+          // Parse the date and time strings
+          const [startHour, startMinute] = shift.start_time.split(':')
           const [endHour, endMinute] = endTime.split(':')
 
-          // Always use today's date for the shift
-          const baseDate = dayjs()
-
+          // Use shift start_date as base date
+          const baseDate = dayjs(shift.start_date)
+          
           const start = baseDate
             .hour(parseInt(startHour))
             .minute(parseInt(startMinute))
@@ -192,25 +150,37 @@ class LocationService {
             end,
             checkinBuffer: 30,
             checkoutBuffer: 30,
-            shiftType: shiftType.name,
-            assignment: assignment.name
+            shiftType: shift.shift_type,
+            assignment: shift.name,
+            startDate: shift.start_date,
+            endDate: shift.end_date
           }
 
           console.log('Created shift timing:', {
             shiftType: timing.shiftType,
             assignment: timing.assignment,
+            startDate: timing.startDate,
+            endDate: timing.endDate,
             start: timing.start.format('YYYY-MM-DD HH:mm:ss'),
             end: timing.end.format('YYYY-MM-DD HH:mm:ss'),
             checkinBuffer: timing.checkinBuffer,
-            checkoutBuffer: timing.checkoutBuffer
+            checkoutBuffer: timing.checkoutBuffer,
+            raw_start: shift.start_time,
+            raw_end: shift.end_time
           })
 
           return timing
         }).filter(Boolean)
 
+        if (this.shiftTimings.length === 0) {
+          console.log('No valid shifts found in response')
+        }
+
         console.log('Updated shift timings:', this.shiftTimings.map(shift => ({
           shiftType: shift.shiftType,
           assignment: shift.assignment,
+          startDate: shift.startDate,
+          endDate: shift.endDate,
           start: shift.start.format('YYYY-MM-DD HH:mm:ss'),
           end: shift.end.format('YYYY-MM-DD HH:mm:ss'),
           checkinBuffer: shift.checkinBuffer,
@@ -219,7 +189,7 @@ class LocationService {
 
         this.retryCount = 0 // Reset retry count on success
       } else {
-        console.log('No shift assignments found')
+        console.log('No shifts found in response')
         this.shiftTimings = []
       }
     } catch (error) {
@@ -248,8 +218,35 @@ class LocationService {
     console.log('Current time:', now.format('YYYY-MM-DD HH:mm:ss'))
     
     const shouldTrack = this.shiftTimings.some(shift => {
-      const checkinStart = shift.start.subtract(shift.checkinBuffer, 'minute')
-      const checkoutEnd = shift.end.add(shift.checkoutBuffer, 'minute')
+      // Check if the shift is still active based on start_date and end_date
+      const isActive = dayjs(shift.startDate).isBefore(now) && 
+                      (!shift.endDate || dayjs(shift.endDate).isAfter(now))
+
+      if (!isActive) {
+        console.log('Shift is not active:', {
+          shift: shift.shiftType,
+          startDate: shift.startDate,
+          endDate: shift.endDate,
+          now: now.format('YYYY-MM-DD')
+        })
+        return false
+      }
+
+      // Get today's shift times
+      const todayStart = now.hour(shift.start.hour())
+                           .minute(shift.start.minute())
+                           .second(0)
+      const todayEnd = now.hour(shift.end.hour())
+                         .minute(shift.end.minute())
+                         .second(0)
+
+      // If end time is before start time, it means the shift goes into the next day
+      if (todayEnd.isBefore(todayStart)) {
+        todayEnd.add(1, 'day')
+      }
+
+      const checkinStart = todayStart.subtract(shift.checkinBuffer, 'minute')
+      const checkoutEnd = todayEnd.add(shift.checkoutBuffer, 'minute')
       
       const isInWindow = now.isAfter(checkinStart) && now.isBefore(checkoutEnd)
       console.log('Checking time window:', {
@@ -259,8 +256,8 @@ class LocationService {
         checkinStart: checkinStart.format('YYYY-MM-DD HH:mm:ss'),
         checkoutEnd: checkoutEnd.format('YYYY-MM-DD HH:mm:ss'),
         isInWindow,
-        shiftStart: shift.start.format('YYYY-MM-DD HH:mm:ss'),
-        shiftEnd: shift.end.format('YYYY-MM-DD HH:mm:ss')
+        shiftStart: todayStart.format('YYYY-MM-DD HH:mm:ss'),
+        shiftEnd: todayEnd.format('YYYY-MM-DD HH:mm:ss')
       })
       
       return isInWindow
