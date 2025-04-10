@@ -26,6 +26,8 @@ class LocationService {
     this.shiftTimings = []
     this.retryCount = 0
     this.maxRetries = 3
+    this.checkinBuffer = 30  // 30 minutes before shift
+    this.checkoutBuffer = 30 // 30 minutes after shift
 
     // Auto update shift timings at midnight
     this.setupDailyShiftUpdate()
@@ -133,133 +135,89 @@ class LocationService {
   async updateShiftTimings() {
     console.log('Updating shift timings...')
     try {
-      // Get shifts for the employee
+      const now = dayjs()
+      
+      // Get shifts for the employee with current date
       const response = await this.shiftResource.submit({
         employee: this.employee.name,
-        date: this.getCurrentTime().format('YYYY-MM-DD')  // Add current date to API call
+        date: now.format('YYYY-MM-DD')
       })
 
       console.log('Shifts response:', response)
+      console.log('Current time:', now.format('YYYY-MM-DD HH:mm:ss'))
 
       // Handle both array response and message format
       const shifts = Array.isArray(response) ? response : 
                     (response?.message?.length ? response.message : [])
 
-      console.log('Processed shifts:', shifts)
+      if (!shifts?.length) {
+        console.log('No shifts found for today')
+        this.shiftTimings = []
+        return
+      }
 
-      if (shifts?.length) {
-        const now = this.getCurrentTime()
-        console.log('Current time for shift calculations:', now.format('YYYY-MM-DD HH:mm:ss'))
-        
-        // Convert shifts to timings
-        this.shiftTimings = shifts.map(shift => {
-          console.log('Processing shift:', shift)
-
-          if (!shift.start_time || !shift.end_time) {
-            console.log('Invalid shift data:', shift)
-            return null
-          }
-
-          // Parse the time strings
-          const [startHour, startMinute] = shift.start_time.split(':')
-          const [endHour, endMinute] = shift.end_time.split(':')
-
-          // Use current date as base date for timing calculations
-          const baseDate = now.startOf('day')
-          console.log('Using base date:', baseDate.format('YYYY-MM-DD'))
-          
-          const start = baseDate
-            .hour(parseInt(startHour))
-            .minute(parseInt(startMinute))
-            .second(0)
-          
-          const end = baseDate
-            .hour(parseInt(endHour))
-            .minute(parseInt(endMinute))
-            .second(0)
-
-          // If end time is before start time, it means the shift goes into the next day
-          if (end.isBefore(start)) {
-            end.add(1, 'day')
-          }
-
-          // Check if shift is active based on start_date and end_date
-          const shiftStartDate = dayjs(shift.start_date)
-          const shiftEndDate = shift.end_date ? dayjs(shift.end_date) : null
-          
-          const isActive = now.isAfter(shiftStartDate) && 
-                          (!shiftEndDate || now.isBefore(shiftEndDate))
-
-          console.log('Shift active status:', {
-            shiftType: shift.shift_type,
-            isActive,
-            shiftStartDate: shiftStartDate.format('YYYY-MM-DD'),
-            shiftEndDate: shiftEndDate?.format('YYYY-MM-DD'),
-            currentDate: now.format('YYYY-MM-DD'),
-            isAfterStart: now.isAfter(shiftStartDate),
-            isBeforeEnd: !shiftEndDate || now.isBefore(shiftEndDate)
-          })
-
-          if (!isActive) {
-            return null
-          }
-
-          const timing = {
-            start,
-            end,
-            checkinBuffer: 30,
-            checkoutBuffer: 30,
-            shiftType: shift.shift_type,
-            assignment: shift.name,
-            startDate: shift.start_date,
-            endDate: shift.end_date
-          }
-
-          console.log('Created shift timing:', {
-            shiftType: timing.shiftType,
-            assignment: timing.assignment,
-            startDate: timing.startDate,
-            endDate: timing.endDate,
-            start: timing.start.format('YYYY-MM-DD HH:mm:ss'),
-            end: timing.end.format('YYYY-MM-DD HH:mm:ss'),
-            checkinBuffer: timing.checkinBuffer,
-            checkoutBuffer: timing.checkoutBuffer,
-            raw_start: shift.start_time,
-            raw_end: shift.end_time
-          })
-
-          return timing
-        }).filter(Boolean)
-
-        if (this.shiftTimings.length === 0) {
-          console.log('No valid shifts found in response')
-        } else {
-          console.log('Updated shift timings:', this.shiftTimings.map(shift => ({
-            shiftType: shift.shiftType,
-            assignment: shift.assignment,
-            startDate: shift.startDate,
-            endDate: shift.endDate,
-            start: shift.start.format('YYYY-MM-DD HH:mm:ss'),
-            end: shift.end.format('YYYY-MM-DD HH:mm:ss'),
-            checkinBuffer: shift.checkinBuffer,
-            checkoutBuffer: shift.checkoutBuffer
-          })))
+      // Convert shifts to timings
+      this.shiftTimings = shifts.map(shift => {
+        if (!shift.start_time || !shift.end_time) {
+          console.log('Invalid shift data - missing times:', shift)
+          return null
         }
 
-        this.retryCount = 0 // Reset retry count on success
+        // Parse shift times
+        const [startHour, startMinute] = shift.start_time.split(':').map(Number)
+        const [endHour, endMinute] = shift.end_time.split(':').map(Number)
+        
+        // Create shift window using current date
+        const shiftDate = now.startOf('day')
+        const start = shiftDate.hour(startHour).minute(startMinute).second(0)
+        const end = shiftDate.hour(endHour).minute(endMinute).second(0)
+        
+        // If end time is before start time, shift ends next day
+        const adjustedEnd = end.isBefore(start) ? end.add(1, 'day') : end
+        
+        // Calculate check windows with buffer
+        const checkinStart = start.subtract(this.checkinBuffer, 'minutes')
+        const checkoutEnd = adjustedEnd.add(this.checkoutBuffer, 'minutes')
+
+        const timing = {
+          shiftType: shift.shift_type,
+          assignment: shift.name,
+          start: start,
+          end: adjustedEnd,
+          checkinStart,
+          checkoutEnd,
+          checkinBuffer: this.checkinBuffer,
+          checkoutBuffer: this.checkoutBuffer
+        }
+
+        console.log('Processed shift:', {
+          type: timing.shiftType,
+          assignment: timing.assignment,
+          start: timing.start.format('HH:mm'),
+          end: timing.end.format('HH:mm'),
+          checkinWindow: `${timing.checkinStart.format('HH:mm')} - ${timing.start.format('HH:mm')}`,
+          checkoutWindow: `${timing.end.format('HH:mm')} - ${timing.checkoutEnd.format('HH:mm')}`
+        })
+
+        return timing
+      }).filter(Boolean)
+
+      if (this.shiftTimings.length) {
+        console.log(`Found ${this.shiftTimings.length} valid shifts for today`)
       } else {
-        console.log('No shifts found in response')
-        this.shiftTimings = []
+        console.log('No valid shifts found after processing')
       }
+
+      this.retryCount = 0 // Reset retry count on success
+      
     } catch (error) {
       console.error('Error fetching shift timings:', error)
       this.shiftTimings = []
       
-      // Retry logic
       if (this.retryCount < this.maxRetries) {
         this.retryCount++
         console.log(`Retrying shift timings update (${this.retryCount}/${this.maxRetries})...`)
-        setTimeout(() => this.updateShiftTimings(), 5000) // Retry after 5 seconds
+        setTimeout(() => this.updateShiftTimings(), 5000)
       } else {
         console.log('Max retries reached, will try again at next check')
         this.retryCount = 0
@@ -273,41 +231,26 @@ class LocationService {
       return false
     }
 
-    const now = this.getCurrentTime()
-    console.log('Current time:', now.format('YYYY-MM-DD HH:mm:ss'))
+    const now = dayjs()
     
+    // Check if current time falls within any shift's check windows
     const shouldTrack = this.shiftTimings.some(shift => {
-      // Get today's shift times
-      const todayStart = now.hour(shift.start.hour())
-                           .minute(shift.start.minute())
-                           .second(0)
-      const todayEnd = now.hour(shift.end.hour())
-                         .minute(shift.end.minute())
-                         .second(0)
-
-      // If end time is before start time, it means the shift goes into the next day
-      if (todayEnd.isBefore(todayStart)) {
-        todayEnd.add(1, 'day')
-      }
-
-      const checkinStart = todayStart.subtract(shift.checkinBuffer, 'minute')
-      const checkoutEnd = todayEnd.add(shift.checkoutBuffer, 'minute')
+      const isInCheckinWindow = now.isAfter(shift.checkinStart) && now.isBefore(shift.start)
+      const isInCheckoutWindow = now.isAfter(shift.end) && now.isBefore(shift.checkoutEnd)
+      const isInShift = now.isAfter(shift.start) && now.isBefore(shift.end)
       
-      const isInWindow = now.isAfter(checkinStart) && now.isBefore(checkoutEnd)
-      console.log('Checking time window:', {
-        shiftType: shift.shiftType,
-        assignment: shift.assignment,
-        now: now.format('YYYY-MM-DD HH:mm:ss'),
-        checkinStart: checkinStart.format('YYYY-MM-DD HH:mm:ss'),
-        checkoutEnd: checkoutEnd.format('YYYY-MM-DD HH:mm:ss'),
-        isInWindow,
-        shiftStart: todayStart.format('YYYY-MM-DD HH:mm:ss'),
-        shiftEnd: todayEnd.format('YYYY-MM-DD HH:mm:ss'),
-        raw_start: shift.start.format('HH:mm:ss'),
-        raw_end: shift.end.format('HH:mm:ss')
+      console.log('Checking windows for shift:', {
+        type: shift.shiftType,
+        current: now.format('HH:mm'),
+        isInCheckinWindow,
+        isInCheckoutWindow,
+        isInShift,
+        checkinWindow: `${shift.checkinStart.format('HH:mm')} - ${shift.start.format('HH:mm')}`,
+        shiftWindow: `${shift.start.format('HH:mm')} - ${shift.end.format('HH:mm')}`,
+        checkoutWindow: `${shift.end.format('HH:mm')} - ${shift.checkoutEnd.format('HH:mm')}`
       })
       
-      return isInWindow
+      return isInCheckinWindow || isInCheckoutWindow || isInShift
     })
 
     console.log('Should track location:', shouldTrack)
@@ -316,58 +259,39 @@ class LocationService {
 
   getNextCheckTime() {
     if (!this.shiftTimings?.length) {
-      console.log('No shift timings available for next check calculation')
+      console.log('No shift timings available for next check')
       return null
     }
 
-    const now = this.getCurrentTime()
+    const now = dayjs()
     let nextTime = null
 
     this.shiftTimings.forEach(shift => {
-      // Get today's times
-      const todayStart = now.hour(shift.start.hour())
-                           .minute(shift.start.minute())
-                           .second(0)
-      const todayEnd = now.hour(shift.end.hour())
-                         .minute(shift.end.minute())
-                         .second(0)
+      const checkPoints = [
+        shift.checkinStart,  // Start of check-in window
+        shift.start,         // Shift start
+        shift.end,          // Shift end
+        shift.checkoutEnd   // End of check-out window
+      ]
 
-      // If end is before start, it means shift goes into next day
-      if (todayEnd.isBefore(todayStart)) {
-        todayEnd.add(1, 'day')
+      // Find next check point
+      for (const point of checkPoints) {
+        if (now.isBefore(point) && (!nextTime || point.isBefore(nextTime))) {
+          nextTime = point
+        }
       }
 
-      const todayCheckinStart = todayStart.subtract(shift.checkinBuffer, 'minute')
-      const todayCheckoutEnd = todayEnd.add(shift.checkoutBuffer, 'minute')
-
-      // If we're past today's window, look at tomorrow
-      if (now.isAfter(todayCheckoutEnd)) {
-        const tomorrowStart = todayStart.add(1, 'day')
-        const tomorrowEnd = todayEnd.add(1, 'day')
-        const tomorrowCheckinStart = todayCheckinStart.add(1, 'day')
-        const tomorrowCheckoutEnd = todayCheckoutEnd.add(1, 'day')
-
-        console.log('Calculating tomorrow times:', {
-          checkinStart: tomorrowCheckinStart.format('YYYY-MM-DD HH:mm:ss'),
-          checkoutEnd: tomorrowCheckoutEnd.format('YYYY-MM-DD HH:mm:ss')
-        })
-
-        if (!nextTime || tomorrowCheckinStart.isBefore(nextTime)) {
-          nextTime = tomorrowCheckinStart
-        }
-      } else {
-        // Still within or before today's window
-        if (now.isBefore(todayCheckinStart) && (!nextTime || todayCheckinStart.isBefore(nextTime))) {
-          nextTime = todayCheckinStart
-        }
-        if (now.isBefore(todayCheckoutEnd) && (!nextTime || todayCheckoutEnd.isBefore(nextTime))) {
-          nextTime = todayCheckoutEnd
+      // If we're past all check points for today, look at tomorrow
+      if (!nextTime) {
+        const tomorrow = shift.checkinStart.add(1, 'day')
+        if (!nextTime || tomorrow.isBefore(nextTime)) {
+          nextTime = tomorrow
         }
       }
     })
 
     if (nextTime) {
-      console.log('Next check time calculated:', nextTime.format('YYYY-MM-DD HH:mm:ss'))
+      console.log('Next check scheduled for:', nextTime.format('YYYY-MM-DD HH:mm:ss'))
     } else {
       console.log('Could not determine next check time')
     }
