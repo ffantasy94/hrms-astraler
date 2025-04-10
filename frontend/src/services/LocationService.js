@@ -104,8 +104,30 @@ class LocationService {
   }
 
   getCurrentTime() {
-    // Get the actual current time
-    return dayjs(new Date())
+    // Force actual current date and time
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+    const currentDate = now.getDate()
+    const currentHours = now.getHours()
+    const currentMinutes = now.getMinutes()
+    const currentSeconds = now.getSeconds()
+
+    console.log('System current time:', {
+      year: currentYear,
+      month: currentMonth + 1,
+      date: currentDate,
+      hours: currentHours,
+      minutes: currentMinutes,
+      seconds: currentSeconds
+    })
+
+    return dayjs().year(currentYear)
+                 .month(currentMonth)
+                 .date(currentDate)
+                 .hour(currentHours)
+                 .minute(currentMinutes)
+                 .second(currentSeconds)
   }
 
   async updateShiftTimings() {
@@ -113,7 +135,8 @@ class LocationService {
     try {
       // Get shifts for the employee
       const response = await this.shiftResource.submit({
-        employee: this.employee.name
+        employee: this.employee.name,
+        date: this.getCurrentTime().format('YYYY-MM-DD')  // Add current date to API call
       })
 
       console.log('Shifts response:', response)
