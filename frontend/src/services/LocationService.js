@@ -11,12 +11,27 @@ class LocationService {
       auto: false,
     })
     this.shiftResource = createResource({
-      url: 'hrms.hr.doctype.shift_assignment.shift_assignment.get_employee_shift_timings',
+      url: 'frappe.client.get_list',
+      params: {
+        doctype: 'Shift Assignment',
+        filters: {
+          employee: '',
+          status: 'Active',
+          docstatus: 1
+        },
+        fields: ['name', 'shift_type', 'start_date', 'end_date', 'status'],
+      },
+      auto: false,
+    })
+    this.shiftTypeResource = createResource({
+      url: 'frappe.client.get',
       auto: false,
     })
     this.locationCheckInterval = null
     this.nextCheckTime = null
     this.shiftTimings = []
+    this.retryCount = 0
+    this.maxRetries = 3
 
     // Auto update shift timings at midnight
     this.setupDailyShiftUpdate()
@@ -97,33 +112,89 @@ class LocationService {
   async updateShiftTimings() {
     console.log('Updating shift timings...')
     try {
+      // First get all active shift assignments
       const response = await this.shiftResource.submit({
-        employee: this.employee.name,
-        date: dayjs().format('YYYY-MM-DD')
+        doctype: 'Shift Assignment',
+        filters: {
+          employee: this.employee.name,
+          status: 'Active',
+          docstatus: 1
+        },
+        fields: ['name', 'shift_type', 'start_date', 'end_date', 'status']
       })
 
-      console.log('Shift timings response:', response)
+      console.log('Shift assignments response:', response)
 
-      if (response?.shift_timings?.length) {
-        this.shiftTimings = response.shift_timings.map(shift => ({
-          start: dayjs(shift.start_datetime),
-          end: dayjs(shift.end_datetime),
-          checkinBuffer: 30,
-          checkoutBuffer: 30
-        }))
+      if (response?.message?.length) {
+        // Get shift type details for each assignment
+        const shiftPromises = response.message.map(assignment => 
+          this.shiftTypeResource.submit({
+            doctype: 'Shift Type',
+            name: assignment.shift_type
+          })
+        )
+
+        const shiftTypes = await Promise.all(shiftPromises)
+        console.log('Shift types:', shiftTypes)
+
+        // Convert shift assignments to timings
+        this.shiftTimings = response.message.map((assignment, index) => {
+          const shiftType = shiftTypes[index]?.message
+          if (!shiftType) return null
+
+          const startTime = shiftType.start_time
+          const endTime = shiftType.end_time
+          const [startHour, startMinute] = startTime.split(':')
+          const [endHour, endMinute] = endTime.split(':')
+
+          const start = dayjs()
+            .hour(parseInt(startHour))
+            .minute(parseInt(startMinute))
+            .second(0)
+          
+          const end = dayjs()
+            .hour(parseInt(endHour))
+            .minute(parseInt(endMinute))
+            .second(0)
+
+          // If end time is before start time, it means the shift goes into the next day
+          if (end.isBefore(start)) {
+            end.add(1, 'day')
+          }
+
+          return {
+            start,
+            end,
+            checkinBuffer: 30,
+            checkoutBuffer: 30
+          }
+        }).filter(Boolean)
+
         console.log('Updated shift timings:', this.shiftTimings.map(shift => ({
           start: shift.start.format('YYYY-MM-DD HH:mm:ss'),
           end: shift.end.format('YYYY-MM-DD HH:mm:ss'),
           checkinBuffer: shift.checkinBuffer,
           checkoutBuffer: shift.checkoutBuffer
         })))
+
+        this.retryCount = 0 // Reset retry count on success
       } else {
-        console.log('No shift timings found')
+        console.log('No shift assignments found')
         this.shiftTimings = []
       }
     } catch (error) {
       console.error('Error fetching shift timings:', error)
       this.shiftTimings = []
+      
+      // Retry logic
+      if (this.retryCount < this.maxRetries) {
+        this.retryCount++
+        console.log(`Retrying shift timings update (${this.retryCount}/${this.maxRetries})...`)
+        setTimeout(() => this.updateShiftTimings(), 5000) // Retry after 5 seconds
+      } else {
+        console.log('Max retries reached, will try again at next check')
+        this.retryCount = 0
+      }
     }
   }
 
