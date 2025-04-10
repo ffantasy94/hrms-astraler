@@ -475,6 +475,41 @@ class LocationService {
         logType = 'OUT'
       }
 
+      // Get shift location if available
+      let shiftLocation = null
+      if (currentShift.shiftType) {
+        try {
+          const shiftTypeResponse = await this.shiftTypeResource.submit({
+            doctype: 'Shift Type',
+            name: currentShift.shiftType
+          })
+          
+          if (shiftTypeResponse && shiftTypeResponse.message) {
+            shiftLocation = shiftTypeResponse.message.location
+            console.log('Shift location:', shiftLocation)
+          }
+        } catch (error) {
+          console.error('Error fetching shift location:', error)
+        }
+      }
+
+      // Check if we're within the allowed radius (500m)
+      if (shiftLocation && shiftLocation.latitude && shiftLocation.longitude) {
+        const distance = this.calculateDistance(
+          latitude, 
+          longitude, 
+          shiftLocation.latitude, 
+          shiftLocation.longitude
+        )
+        
+        console.log('Distance from shift location:', distance, 'meters')
+        
+        if (distance > 500) {
+          console.log('Outside allowed radius (500m), skipping check-in/out')
+          return
+        }
+      }
+
       // Prepare check-in data
       const checkInData = {
         doc: {
@@ -483,7 +518,9 @@ class LocationService {
           log_type: logType,
           time: now.format('YYYY-MM-DD HH:mm:ss'),
           latitude: latitude,
-          longitude: longitude
+          longitude: longitude,
+          shift: currentShift.assignment,
+          shift_type: currentShift.shiftType
         }
       }
 
@@ -494,6 +531,22 @@ class LocationService {
     } catch (error) {
       console.error('Error creating automatic checkin:', error)
     }
+  }
+
+  // Calculate distance between two points in meters using Haversine formula
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3 // Earth's radius in meters
+    const φ1 = lat1 * Math.PI / 180
+    const φ2 = lat2 * Math.PI / 180
+    const Δφ = (lat2 - lat1) * Math.PI / 180
+    const Δλ = (lon2 - lon1) * Math.PI / 180
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+
+    return R * c // Distance in meters
   }
 
   handleError(error) {
