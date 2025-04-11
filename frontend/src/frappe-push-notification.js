@@ -124,8 +124,8 @@ class FrappePushNotification {
         }
       });
       
-      if (response && response.message && response.message.vapid_key) {
-        this.vapidKey = response.message.vapid_key;
+      if (response && response.vapid_key) {
+        this.vapidKey = response.vapid_key;
         console.log('VAPID key loaded successfully');
         return this.vapidKey;
       }

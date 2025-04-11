@@ -807,16 +807,21 @@ def get_firebase_config():
 		frappe.throw(_("Failed to get Firebase configuration"))
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def get_vapid_key():
-	"""Get Firebase VAPID key from site config"""
+	"""Get VAPID public key from site_config"""
 	try:
-		vapid_key = frappe.conf.get("firebase_vapid_key")
-		if not vapid_key:
-			frappe.throw(_("Firebase VAPID key not configured"))
-		return {"vapid_key": vapid_key}
+		site_config = frappe.get_site_config()
+		vapid_public_key = site_config.get('vapid_public_key')
+		
+		if not vapid_public_key:
+			frappe.throw(_("VAPID key is not configured in site_config.json"))
+			
+		return {
+			"vapid_key": vapid_public_key
+		}
 	except Exception as e:
-		frappe.log_error("VAPID Key Error", str(e))
+		frappe.log_error(frappe.get_traceback(), "Failed to get VAPID key")
 		frappe.throw(_("Failed to get VAPID key"))
 
 
