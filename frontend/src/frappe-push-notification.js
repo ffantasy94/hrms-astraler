@@ -45,19 +45,19 @@ class FrappePushNotification {
 
         console.log('Firebase config response:', response);
 
-        if (!response || !response.message) {
+        if (!response) {
           throw new Error('Invalid response format from get_firebase_config');
         }
 
         // Convert response to Firebase config format
         this.config = {
-          apiKey: response.message.firebase_api_key,
-          authDomain: response.message.firebase_auth_domain,
-          projectId: response.message.firebase_project_id,
-          storageBucket: response.message.firebase_storage_bucket,
-          messagingSenderId: response.message.firebase_messaging_sender_id,
-          appId: response.message.firebase_app_id,
-          measurementId: response.message.firebase_measurement_id
+          apiKey: response.apiKey,
+          authDomain: response.authDomain,
+          projectId: response.projectId,
+          storageBucket: response.storageBucket,
+          messagingSenderId: response.messagingSenderId,
+          appId: response.appId,
+          measurementId: response.measurementId
         };
 
         console.log('Firebase config loaded:', this.config);
