@@ -4,9 +4,8 @@ import { frappeRequest } from "frappe-ui"
 let socket = null;
 
 export async function initSocket() {
-	// Check if we're in a browser environment
-	if (typeof window === 'undefined') {
-		return null;
+	if (socket) {
+		return socket;
 	}
 
 	try {

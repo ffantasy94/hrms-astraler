@@ -11,103 +11,91 @@ class FrappePushNotification {
     this.analytics = null;
     this.vapidKey = null;
     this.initialized = false;
+    this.initializationPromise = null;
   }
 
   async initialize() {
-    // Prevent multiple initializations
+    // If already initialized, return the existing promise
     if (this.initialized) {
-      console.log('Firebase already initialized');
       return true;
     }
 
-    try {
-      console.log('Fetching Firebase config from server...');
-      
-      // Fetch Firebase config from server with retry logic
-      let retries = 3;
-      let response;
-      
-      while (retries > 0) {
-        try {
-          response = await frappeRequest({
-            url: 'hrms.api.get_firebase_config',
-            method: 'GET',
-            onError: (error) => {
-              console.error('Error fetching Firebase config:', error);
-              if (error.exc_type === 'ValidationError') {
-                console.warn('Firebase configuration is missing in site_config.json. Please contact your system administrator.');
-                throw error; // Stop retrying on ValidationError
-              }
+    // If initialization is in progress, return the existing promise
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    // Create a new promise for initialization
+    this.initializationPromise = (async () => {
+      try {
+        console.log('Fetching Firebase config from server...');
+        
+        // Fetch Firebase config from server
+        const response = await frappeRequest({
+          url: 'hrms.api.get_firebase_config',
+          method: 'GET',
+          onError: (error) => {
+            console.error('Error fetching Firebase config:', error);
+            if (error.exc_type === 'ValidationError') {
+              console.warn('Firebase configuration is missing in site_config.json. Please contact your system administrator.');
+              throw error;
             }
-          });
-          
-          if (response && response.message) {
-            break;
           }
-        } catch (error) {
-          if (error.exc_type === 'ValidationError') {
-            throw error; // Stop retrying on ValidationError
-          }
-          console.warn(`Retry ${retries} failed:`, error);
-          retries--;
-          if (retries === 0) {
-            throw error;
-          }
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        });
+
+        if (!response || !response.message) {
+          throw new Error('Invalid response format from get_firebase_config');
         }
-      }
 
-      console.log('Firebase config response:', response);
-
-      if (response && response.message) {
         this.config = response.message;
         console.log('Firebase config loaded:', this.config);
-      } else {
-        throw new Error('Failed to fetch Firebase config: Invalid response format');
-      }
 
-      // Validate required Firebase config fields
-      const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
-      const missingFields = requiredFields.filter(field => !this.config[field]);
-      
-      if (missingFields.length > 0) {
-        throw new Error(`Missing required Firebase config fields: ${missingFields.join(', ')}. Please contact your system administrator.`);
-      }
+        // Validate required Firebase config fields
+        const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+        const missingFields = requiredFields.filter(field => !this.config[field]);
+        
+        if (missingFields.length > 0) {
+          throw new Error(`Missing required Firebase config fields: ${missingFields.join(', ')}. Please contact your system administrator.`);
+        }
 
-      // Initialize Firebase
-      console.log('Initializing Firebase app...');
-      this.app = initializeApp(this.config);
-      
-      // Initialize Analytics
-      console.log('Initializing Firebase Analytics...');
-      this.analytics = getAnalytics(this.app);
-      
-      // Initialize Messaging
-      console.log('Initializing Firebase Messaging...');
-      this.messaging = getMessaging(this.app);
-      
-      // Get VAPID key from server
-      console.log('Fetching VAPID key...');
-      const vapidKey = await this.fetchVapidKey();
-      
-      if (!vapidKey) {
-        console.warn('VAPID key not found. Push notifications will not work. Please contact your system administrator.');
+        // Initialize Firebase
+        console.log('Initializing Firebase app...');
+        this.app = initializeApp(this.config);
+        
+        // Initialize Analytics
+        console.log('Initializing Firebase Analytics...');
+        this.analytics = getAnalytics(this.app);
+        
+        // Initialize Messaging
+        console.log('Initializing Firebase Messaging...');
+        this.messaging = getMessaging(this.app);
+        
+        // Get VAPID key from server
+        console.log('Fetching VAPID key...');
+        const vapidKey = await this.fetchVapidKey();
+        
+        if (!vapidKey) {
+          console.warn('VAPID key not found. Push notifications will not work. Please contact your system administrator.');
+          return false;
+        }
+        
+        console.log('Firebase initialization completed successfully');
+        this.initialized = true;
+        return true;
+      } catch (error) {
+        console.error('Error initializing Firebase:', error);
+        if (error.message.includes('site_config.json')) {
+          console.warn('Firebase is not configured. Push notifications will not work.');
+        } else {
+          console.warn('Failed to initialize Firebase. Push notifications will not work.');
+        }
         return false;
+      } finally {
+        this.initializationPromise = null;
       }
-      
-      console.log('Firebase initialization completed successfully');
-      this.initialized = true;
-      return true;
-    } catch (error) {
-      console.error('Error initializing Firebase:', error);
-      // Show user-friendly error message
-      if (error.message.includes('site_config.json')) {
-        console.warn('Firebase is not configured. Push notifications will not work.');
-      } else {
-        console.warn('Failed to initialize Firebase. Push notifications will not work.');
-      }
-      return false;
-    }
+    })();
+
+    return this.initializationPromise;
   }
 
   async fetchVapidKey() {
