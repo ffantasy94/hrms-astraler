@@ -52,4 +52,18 @@ def update_fcm_token():
         return {"message": "Token updated successfully"}
     except Exception as e:
         frappe.log_error("FCM Token Update Error", str(e))
-        frappe.throw(_("Failed to update FCM token")) 
+        frappe.throw(_("Failed to update FCM token"))
+
+@frappe.whitelist()
+def get_socket_url():
+    """Get socket.io URL from site config"""
+    try:
+        # Use the current domain for socket connection
+        protocol = 'https' if frappe.conf.get('ssl_certificate') else 'http'
+        host = frappe.conf.get('host_name') or frappe.local.site
+        
+        socket_url = f"{protocol}://{host}"
+        return {"socket_url": socket_url}
+    except Exception as e:
+        frappe.log_error("Socket URL Error", str(e))
+        frappe.throw(_("Failed to get socket URL")) 
