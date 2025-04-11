@@ -16,14 +16,38 @@ class FrappePushNotification {
     try {
       console.log('Fetching Firebase config from server...');
       
-      // Fetch Firebase config from server
-      const response = await frappeRequest({
-        url: 'hrms.api.get_firebase_config',
-        method: 'GET',
-        onError: (error) => {
-          console.error('Error fetching Firebase config:', error);
+      // Fetch Firebase config from server with retry logic
+      let retries = 3;
+      let response;
+      
+      while (retries > 0) {
+        try {
+          response = await frappeRequest({
+            url: 'hrms.api.get_firebase_config',
+            method: 'GET',
+            onError: (error) => {
+              console.error('Error fetching Firebase config:', error);
+              if (error.exc_type === 'ValidationError') {
+                console.warn('Firebase configuration is missing in site_config.json. Please contact your system administrator.');
+              }
+            }
+          });
+          
+          if (response && response.message) {
+            break;
+          }
+        } catch (error) {
+          console.warn(`Retry ${retries} failed:`, error);
+          retries--;
+          if (retries === 0) {
+            if (error.exc_type === 'ValidationError') {
+              throw new Error('Firebase configuration is missing in site_config.json. Please contact your system administrator.');
+            }
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      });
+      }
 
       console.log('Firebase config response:', response);
 
@@ -39,7 +63,7 @@ class FrappePushNotification {
       const missingFields = requiredFields.filter(field => !this.config[field]);
       
       if (missingFields.length > 0) {
-        throw new Error(`Missing required Firebase config fields: ${missingFields.join(', ')}`);
+        throw new Error(`Missing required Firebase config fields: ${missingFields.join(', ')}. Please contact your system administrator.`);
       }
 
       // Initialize Firebase
@@ -56,12 +80,23 @@ class FrappePushNotification {
       
       // Get VAPID key from server
       console.log('Fetching VAPID key...');
-      await this.fetchVapidKey();
+      const vapidKey = await this.fetchVapidKey();
+      
+      if (!vapidKey) {
+        console.warn('VAPID key not found. Push notifications will not work. Please contact your system administrator.');
+        return false;
+      }
       
       console.log('Firebase initialization completed successfully');
       return true;
     } catch (error) {
       console.error('Error initializing Firebase:', error);
+      // Show user-friendly error message
+      if (error.message.includes('site_config.json')) {
+        console.warn('Firebase is not configured. Push notifications will not work.');
+      } else {
+        console.warn('Failed to initialize Firebase. Push notifications will not work.');
+      }
       return false;
     }
   }
@@ -71,13 +106,22 @@ class FrappePushNotification {
       // Fetch VAPID key from Frappe backend
       const response = await frappeRequest({
         url: 'hrms.api.get_vapid_key',
-        method: 'GET'
+        method: 'GET',
+        onError: (error) => {
+          console.error('Error fetching VAPID key:', error);
+          if (error.exc_type === 'ValidationError') {
+            console.warn('VAPID key is missing in site_config.json. Please contact your system administrator.');
+          }
+        }
       });
       
       if (response && response.message && response.message.vapid_key) {
         this.vapidKey = response.message.vapid_key;
+        console.log('VAPID key loaded successfully');
         return this.vapidKey;
       }
+      
+      console.warn('No VAPID key found in response');
       return null;
     } catch (error) {
       console.error('Error fetching VAPID key:', error);

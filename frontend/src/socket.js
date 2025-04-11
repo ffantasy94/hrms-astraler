@@ -1,25 +1,30 @@
 import { io } from "socket.io-client"
+import { frappeRequest } from "frappe-ui"
 
-export function initSocket() {
+let socket = null;
+
+export async function initSocket() {
 	// Check if we're in a browser environment
 	if (typeof window === 'undefined') {
 		return null;
 	}
 
 	try {
-		let host = window.location.hostname;
-		let siteName = window.site_name || '';
-		let protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-		
-		// Use the current domain for socket connection
-		let url = `${protocol}://${host}`;
-		
-		console.log('Initializing socket connection to:', url);
-		
-		let socket = io(url, {
-			withCredentials: true,
+		// Get socket URL from server config
+		const response = await frappeRequest({
+			url: 'hrms.api.get_socket_url',
+			method: 'GET'
+		});
+
+		const socketUrl = response?.message?.socket_url || window.location.origin;
+		console.log('Initializing socket connection to:', socketUrl);
+
+		socket = io(socketUrl, {
+			transports: ['websocket', 'polling'],
+			reconnection: true,
 			reconnectionAttempts: 5,
-			path: '/socket.io'
+			reconnectionDelay: 1000,
+			timeout: 20000
 		});
 
 		socket.on("connect", () => {
@@ -27,7 +32,11 @@ export function initSocket() {
 		});
 
 		socket.on("connect_error", (error) => {
-			console.warn('Socket connection error:', error.message);
+			console.error('Socket connection error:', error);
+		});
+
+		socket.on("disconnect", (reason) => {
+			console.log('Socket disconnected:', reason);
 		});
 
 		socket.on("hrms:refetch_resource", (data) => {
@@ -47,4 +56,8 @@ export function initSocket() {
 		console.error('Error initializing socket:', error);
 		return null;
 	}
+}
+
+export function getSocket() {
+	return socket;
 }
