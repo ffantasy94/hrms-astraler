@@ -10,9 +10,16 @@ class FrappePushNotification {
     this.messaging = null;
     this.analytics = null;
     this.vapidKey = null;
+    this.initialized = false;
   }
 
   async initialize() {
+    // Prevent multiple initializations
+    if (this.initialized) {
+      console.log('Firebase already initialized');
+      return true;
+    }
+
     try {
       console.log('Fetching Firebase config from server...');
       
@@ -29,6 +36,7 @@ class FrappePushNotification {
               console.error('Error fetching Firebase config:', error);
               if (error.exc_type === 'ValidationError') {
                 console.warn('Firebase configuration is missing in site_config.json. Please contact your system administrator.');
+                throw error; // Stop retrying on ValidationError
               }
             }
           });
@@ -37,12 +45,12 @@ class FrappePushNotification {
             break;
           }
         } catch (error) {
+          if (error.exc_type === 'ValidationError') {
+            throw error; // Stop retrying on ValidationError
+          }
           console.warn(`Retry ${retries} failed:`, error);
           retries--;
           if (retries === 0) {
-            if (error.exc_type === 'ValidationError') {
-              throw new Error('Firebase configuration is missing in site_config.json. Please contact your system administrator.');
-            }
             throw error;
           }
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -88,6 +96,7 @@ class FrappePushNotification {
       }
       
       console.log('Firebase initialization completed successfully');
+      this.initialized = true;
       return true;
     } catch (error) {
       console.error('Error initializing Firebase:', error);

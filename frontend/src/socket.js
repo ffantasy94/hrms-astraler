@@ -19,12 +19,18 @@ export async function initSocket() {
 		const socketUrl = response?.message?.socket_url || window.location.origin;
 		console.log('Initializing socket connection to:', socketUrl);
 
+		// Configure socket.io with proper path and options
 		socket = io(socketUrl, {
+			path: '/socket.io',
 			transports: ['websocket', 'polling'],
 			reconnection: true,
 			reconnectionAttempts: 5,
 			reconnectionDelay: 1000,
-			timeout: 20000
+			timeout: 20000,
+			withCredentials: true,
+			extraHeaders: {
+				'X-Frappe-Site-Name': window.frappe?.boot?.sitename || ''
+			}
 		});
 
 		socket.on("connect", () => {
