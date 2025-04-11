@@ -14,30 +14,51 @@ class FrappePushNotification {
 
   async initialize() {
     try {
+      console.log('Fetching Firebase config from server...');
+      
       // Fetch Firebase config from server
       const response = await frappeRequest({
         url: 'hrms.api.get_firebase_config',
-        method: 'GET'
+        method: 'GET',
+        onError: (error) => {
+          console.error('Error fetching Firebase config:', error);
+        }
       });
+
+      console.log('Firebase config response:', response);
 
       if (response && response.message) {
         this.config = response.message;
+        console.log('Firebase config loaded:', this.config);
       } else {
-        throw new Error('Failed to fetch Firebase config');
+        throw new Error('Failed to fetch Firebase config: Invalid response format');
+      }
+
+      // Validate required Firebase config fields
+      const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+      const missingFields = requiredFields.filter(field => !this.config[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required Firebase config fields: ${missingFields.join(', ')}`);
       }
 
       // Initialize Firebase
+      console.log('Initializing Firebase app...');
       this.app = initializeApp(this.config);
       
       // Initialize Analytics
+      console.log('Initializing Firebase Analytics...');
       this.analytics = getAnalytics(this.app);
       
       // Initialize Messaging
+      console.log('Initializing Firebase Messaging...');
       this.messaging = getMessaging(this.app);
       
       // Get VAPID key from server
+      console.log('Fetching VAPID key...');
       await this.fetchVapidKey();
       
+      console.log('Firebase initialization completed successfully');
       return true;
     } catch (error) {
       console.error('Error initializing Firebase:', error);
