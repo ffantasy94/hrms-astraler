@@ -49,8 +49,16 @@ class FrappePushNotification {
           throw new Error('Invalid response format from get_firebase_config');
         }
 
-        // Use the response directly as it's already in the correct format
-        this.config = response.message;
+        // Convert response to Firebase config format
+        this.config = {
+          apiKey: response.message.firebase_api_key,
+          authDomain: response.message.firebase_auth_domain,
+          projectId: response.message.firebase_project_id,
+          storageBucket: response.message.firebase_storage_bucket,
+          messagingSenderId: response.message.firebase_messaging_sender_id,
+          appId: response.message.firebase_app_id,
+          measurementId: response.message.firebase_measurement_id
+        };
 
         console.log('Firebase config loaded:', this.config);
 
